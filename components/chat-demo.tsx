@@ -32,11 +32,18 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   imageName?: string;
+  imageDataUrl?: string;
+  imageMediaType?: string;
 };
 
 type RecommendationResponse =
   | {
       type: "clarification";
+      message: string;
+      aiProvider?: string;
+    }
+  | {
+      type: "unavailable";
       message: string;
       aiProvider?: string;
     }
@@ -64,6 +71,18 @@ const initialMessages: ChatMessage[] = [
 
 function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function readImageAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      typeof reader.result === "string"
+        ? resolve(reader.result)
+        : reject(new Error("Gagal membaca file gambar."));
+    reader.onerror = () => reject(new Error("Gagal membaca file gambar."));
+    reader.readAsDataURL(file);
+  });
 }
 
 function AgentWorkflowTrace({ trace }: { trace: AgentTraceStep[] }) {
@@ -162,11 +181,18 @@ export function ChatDemo() {
     setRecommendation(null);
 
     const userContent = prompt || "Saya unggah foto masalah rumah.";
+    let imageDataUrl: string | undefined;
+    if (attachedImage) {
+      imageDataUrl = await readImageAsDataUrl(attachedImage);
+    }
+
     const userMessage: ChatMessage = {
       id: createId("user"),
       role: "user",
       content: userContent,
       imageName: attachedImage?.name,
+      imageDataUrl,
+      imageMediaType: attachedImage?.type || undefined,
     };
     const nextMessages = [...messages, userMessage];
 
@@ -204,6 +230,9 @@ export function ChatDemo() {
       );
       setInput("");
       setAttachedImage(null);
+      if (imageInputRef.current) {
+        imageInputRef.current.value = "";
+      }
     } catch (error) {
       setError(
         error instanceof Error

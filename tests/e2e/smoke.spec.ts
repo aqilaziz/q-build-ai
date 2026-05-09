@@ -77,6 +77,66 @@ test.describe("smoke pages", () => {
     await expect(page.getByText("Belum ada hasil")).toBeVisible();
   });
 
+  test("home handles unavailable catalog requests politely", async ({ page }) => {
+    await page.route("**/api/recommendation", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          type: "unavailable",
+          message:
+            "Maaf, produk itu belum tersedia di katalog demo kami. Saat ini saya bisa bantu untuk waterproofing, cat tembok, plumbing, keramik, perbaikan dinding, dan tools pendukung renovasi.",
+          aiProvider: "sumopod",
+        }),
+      });
+    });
+
+    await page.goto("/");
+    await page.getByLabel("Pesan renovasi").fill("kipas saya rusak, mau beli baru");
+    await page.getByRole("button", { name: "Kirim" }).click();
+
+    await expect(page.getByText(/Maaf, produk itu belum tersedia/)).toBeVisible();
+    await expect(page.getByText("Belum ada hasil")).toBeVisible();
+  });
+
+  test("home sends uploaded image data to recommendation API", async ({ page }) => {
+    await page.route("**/api/recommendation", async (route) => {
+      const payload = route.request().postDataJSON() as {
+        messages: Array<{ imageDataUrl?: string; imageMediaType?: string }>;
+      };
+      const lastMessage = payload.messages.at(-1);
+
+      expect(lastMessage?.imageDataUrl).toContain("data:image/png;base64,");
+      expect(lastMessage?.imageMediaType).toBe("image/png");
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          type: "clarification",
+          message: "Saya melihat foto. Berapa luas area yang terdampak?",
+          aiProvider: "sumopod",
+        }),
+      });
+    });
+
+    await page.goto("/");
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "retak.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+        "base64",
+      ),
+    });
+    await page.getByLabel("Pesan renovasi").fill("tolong cek foto ini");
+    await page.getByRole("button", { name: "Kirim" }).click();
+
+    await expect(
+      page.getByText("Saya melihat foto. Berapa luas area yang terdampak?"),
+    ).toBeVisible();
+  });
+
   test("catalog shows searchable product data", async ({ page }) => {
     await page.goto("/catalog");
 

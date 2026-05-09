@@ -1,4 +1,4 @@
-import { generateText } from "ai";
+import { generateObject, type ModelMessage } from "ai";
 import { z } from "zod";
 import { calculatePaint, calculateSubtotal, calculateWaterproofing } from "@/lib/calculators";
 import { searchProducts } from "@/lib/ai/products";
@@ -25,6 +25,8 @@ type RequestMessage = {
   role: "user" | "assistant";
   content: string;
   imageName?: string;
+  imageDataUrl?: string;
+  imageMediaType?: string;
 };
 
 type QuoteItem = {
@@ -46,25 +48,52 @@ const fallbackQuestions: Record<string, string> = {
   qualityPreference: "Prioritasnya harga hemat, kualitas standar, atau kualitas premium/tahan lama?",
 };
 
+const supportedCategoryText =
+  "waterproofing/atap bocor, cat tembok, plumbing/pipa, keramik, perbaikan dinding, dan tools pendukung renovasi";
+
+const unsupportedKeywords = [
+  "kipas",
+  "fan",
+  "ac",
+  "air conditioner",
+  "kulkas",
+  "mesin cuci",
+  "tv",
+  "televisi",
+  "kompor",
+  "lampu",
+  "kasur",
+  "sofa",
+  "meja",
+  "kursi",
+];
+
+const supportedKeywords = [
+  "atap",
+  "dak",
+  "bocor",
+  "rembes",
+  "waterproof",
+  "cat",
+  "dinding",
+  "tembok",
+  "plafon",
+  "pipa",
+  "plumbing",
+  "keramik",
+  "ubin",
+  "nat",
+  "semen",
+  "dempul",
+  "retak",
+];
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(value);
-}
-
-function extractJson(text: string) {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
-  const source = fenced ?? text;
-  const start = source.indexOf("{");
-  const end = source.lastIndexOf("}");
-
-  if (start < 0 || end < start) {
-    throw new Error("AI tidak mengembalikan JSON intake.");
-  }
-
-  return JSON.parse(source.slice(start, end + 1));
 }
 
 function toTranscript(messages: RequestMessage[]) {
@@ -75,6 +104,79 @@ function toTranscript(messages: RequestMessage[]) {
       return `${message.role === "user" ? "Pelanggan" : "Asisten"}: ${message.content}${image}`;
     })
     .join("\n");
+}
+
+function normalizeText(value: string) {
+  return value.toLowerCase();
+}
+
+function hasNoPreference(messages: RequestMessage[]) {
+  const lastUserText = messages
+    .filter((message) => message.role === "user")
+    .slice(-2)
+    .map((message) => message.content)
+    .join(" ");
+
+  return /\b(tidak ada|nggak ada|gak ada|ga ada|bebas|terserah|standar saja|standard saja)\b/i.test(
+    lastUserText,
+  );
+}
+
+function detectUnsupportedRequest(messages: RequestMessage[]) {
+  const text = normalizeText(
+    messages
+      .filter((message) => message.role === "user")
+      .map((message) => message.content)
+      .join(" "),
+  );
+
+  const hasUnsupported = unsupportedKeywords.some((keyword) =>
+    text.includes(keyword),
+  );
+  const hasSupported = supportedKeywords.some((keyword) => text.includes(keyword));
+
+  return hasUnsupported && !hasSupported;
+}
+
+function unavailableResponse(detail?: string) {
+  return Response.json({
+    type: "unavailable",
+    message:
+      detail ??
+      `Maaf, produk itu belum tersedia di katalog demo kami. Saat ini saya bisa bantu untuk ${supportedCategoryText}.`,
+    aiProvider: "sumopod",
+  });
+}
+
+function toModelMessages(messages: RequestMessage[], transcript: string): ModelMessage[] {
+  const recentMessages = messages.slice(-10);
+
+  return recentMessages.map((message, index) => {
+    const isLast = index === recentMessages.length - 1;
+    const text = isLast
+      ? `Riwayat chat:\n${transcript}\n\nAnalisis pesan terakhir pelanggan dan foto bila ada.`
+      : message.content;
+
+    if (message.role === "assistant") {
+      return { role: "assistant", content: text };
+    }
+
+    if (message.imageDataUrl) {
+      return {
+        role: "user",
+        content: [
+          { type: "text", text },
+          {
+            type: "image",
+            image: message.imageDataUrl,
+            mediaType: message.imageMediaType ?? "image/jpeg",
+          },
+        ],
+      };
+    }
+
+    return { role: "user", content: text };
+  });
 }
 
 function requiredMissingFields(intake: Intake) {
@@ -101,42 +203,37 @@ function nextQuestion(intake: Intake, missingFields: string[]) {
 
 async function analyzeIntake(messages: RequestMessage[]) {
   const transcript = toTranscript(messages);
-  const { text } = await generateText({
+  const { object } = await generateObject({
     model: getChatModel(),
+    schema: intakeSchema,
+    schemaName: "QBuildIntake",
+    schemaDescription:
+      "Hasil intake kebutuhan pelanggan toko bahan bangunan sebelum membuat rekomendasi produk.",
     temperature: 0.1,
     maxOutputTokens: 700,
-    system:
-      "Anda adalah intake agent toko bahan bangunan. Ekstrak kebutuhan pelanggan dari riwayat chat. Balas hanya JSON valid, tanpa markdown.",
-    prompt: `Ekstrak data berikut dari riwayat chat. Gunakan null jika belum disebut.
+    system: `Anda adalah intake agent toko bahan bangunan.
+Ekstrak kebutuhan pelanggan dari riwayat chat dan foto bila ada.
+Jangan membuat quotation bila data penting belum cukup.
 
-Schema JSON:
-{
-  "intent": "waterproofing|paint|tiles|plumbing|wall_repair|unknown",
-  "problemSummary": "ringkasan masalah pelanggan",
-  "areaM2": number|null,
-  "color": string|null,
-  "budgetPreference": "economy|standard|premium"|null,
-  "maxBudget": number|null,
-  "qualityPreference": string|null,
-  "location": string|null,
-  "missingFields": string[],
-  "nextQuestion": string|null,
-  "confidence": number
-}
-
-Aturan:
+Aturan intent:
 - Untuk atap bocor/dak bocor/rembes, intent = waterproofing.
 - Untuk cat ulang/dinding/tembok/repaint, intent = paint.
-- Jangan membuat quotation jika luas area belum ada.
+- Jika gambar menunjukkan noda air/plafon lembap/retak dak/permukaan bocor, arahkan ke waterproofing atau wall_repair sesuai konteks.
+- Jika pelanggan meminta produk di luar katalog renovasi, seperti kipas/AC/elektronik/furniture, intent = unknown dan jangan tanya budget.
 - Untuk cat, warna wajib ditanya.
 - Untuk waterproofing dan cat, tanya preferensi ekonomis/standar/premium atau batas budget sebelum rekomendasi produk.
-- nextQuestion harus satu pertanyaan pendek dan natural dalam Bahasa Indonesia bila ada data penting yang kurang.
-
-Riwayat chat:
-${transcript}`,
+- Jika pelanggan menjawab "tidak ada", "bebas", "terserah", atau "standar saja" untuk budget/kualitas, set budgetPreference = "standard".
+- nextQuestion harus satu pertanyaan pendek dan natural dalam Bahasa Indonesia bila ada data penting yang kurang.`,
+    messages: [
+      {
+        role: "user",
+        content: `Riwayat chat:\n${transcript}`,
+      },
+      ...toModelMessages(messages, transcript),
+    ],
   });
 
-  return intakeSchema.parse(extractJson(text));
+  return object;
 }
 
 function chooseByBudget(products: ProductSearchResult[], budgetPreference: Intake["budgetPreference"]) {
@@ -381,7 +478,21 @@ export async function POST(request: Request) {
       return Response.json({ error: "Riwayat chat kosong." }, { status: 400 });
     }
 
+    if (detectUnsupportedRequest(messages)) {
+      return unavailableResponse();
+    }
+
     const intake = await analyzeIntake(messages);
+    if (hasNoPreference(messages) && !intake.budgetPreference) {
+      intake.budgetPreference = "standard";
+    }
+
+    if (intake.intent === "unknown") {
+      return unavailableResponse(
+        `Maaf, saya belum menemukan produk yang sesuai di katalog demo untuk kebutuhan tersebut. Saat ini katalog yang tersedia mencakup ${supportedCategoryText}.`,
+      );
+    }
+
     const missingFields = requiredMissingFields(intake);
 
     if (missingFields.length > 0) {
@@ -411,13 +522,7 @@ export async function POST(request: Request) {
       });
     }
 
-    return Response.json({
-      type: "clarification",
-      message:
-        "Untuk demo saat ini saya paling siap membantu atap/dak bocor dan cat ulang. Masalahnya termasuk yang mana?",
-      intake,
-      aiProvider: "sumopod",
-    });
+    return unavailableResponse();
   } catch (error) {
     return Response.json(
       {
