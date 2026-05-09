@@ -12,21 +12,69 @@ test.describe("smoke pages", () => {
     await expect(page.getByRole("link", { name: "Demo login" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Katalog produk" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Kirim" })).toBeVisible();
-    await expect(page.getByText("Atap bocor 15 m2")).toBeVisible();
-    await expect(page.getByText("Agent Workflow Trace")).toBeVisible();
-  });
-
-  test("home can start a new local chat session", async ({ page }) => {
-    await page.goto("/");
-
-    await expect(page.getByText("Atap bocor 15 m2")).toBeVisible();
-    await page.getByRole("button", { name: "Session Baru" }).click();
-
     await expect(page.getByText("Belum ada hasil")).toBeVisible();
-    await expect(page.getByText("Atap bocor 15 m2")).toHaveCount(0);
     await expect(page.getByLabel("Pesan renovasi")).toHaveValue(
       "Atap kamar saya bocor setelah hujan. Area sekitar 15 meter persegi.",
     );
+  });
+
+  test("home can start a new local chat session", async ({ page }) => {
+    await page.route("**/api/recommendation", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          type: "recommendation",
+          message: "Rekomendasi mock siap.",
+          recommendation: {
+            title: "Mock waterproofing 12 m2",
+            problemSummary: "Atap bocor 12 m2.",
+            diagnosis: "Mock diagnosis.",
+            items: [],
+            breakdown: [],
+            subtotal: 100000,
+          },
+          aiProvider: "sumopod",
+        }),
+      });
+    });
+
+    await page.goto("/");
+
+    await page.getByLabel("Pesan renovasi").fill("Atap bocor 12 m2, kualitas standar");
+    await page.getByRole("button", { name: "Kirim" }).click();
+    await expect(page.getByText("Mock waterproofing 12 m2")).toBeVisible();
+
+    await page.getByRole("button", { name: "Session Baru" }).click();
+
+    await expect(page.getByText("Belum ada hasil")).toBeVisible();
+    await expect(page.getByText("Mock waterproofing 12 m2")).toHaveCount(0);
+    await expect(page.getByLabel("Pesan renovasi")).toHaveValue(
+      "Atap kamar saya bocor setelah hujan. Area sekitar 15 meter persegi.",
+    );
+  });
+
+  test("home asks clarification before quotation when data is missing", async ({ page }) => {
+    await page.route("**/api/recommendation", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          type: "clarification",
+          message: "Berapa luas area atap yang bocor dalam m2?",
+          aiProvider: "sumopod",
+        }),
+      });
+    });
+
+    await page.goto("/");
+    await page.getByLabel("Pesan renovasi").fill("Atap saya bocor");
+    await page.getByRole("button", { name: "Kirim" }).click();
+
+    await expect(
+      page.getByText("Berapa luas area atap yang bocor dalam m2?"),
+    ).toBeVisible();
+    await expect(page.getByText("Belum ada hasil")).toBeVisible();
   });
 
   test("catalog shows searchable product data", async ({ page }) => {

@@ -22,7 +22,6 @@ import {
 import { FormEvent, useMemo, useRef, useState } from "react";
 import {
   AgentTraceStep,
-  buildRecommendation,
   formatCurrency,
   Recommendation,
   saveQuote,
@@ -34,6 +33,19 @@ type ChatMessage = {
   content: string;
   imageName?: string;
 };
+
+type RecommendationResponse =
+  | {
+      type: "clarification";
+      message: string;
+      aiProvider?: string;
+    }
+  | {
+      type: "recommendation";
+      message: string;
+      recommendation: Recommendation;
+      aiProvider?: string;
+    };
 
 const samplePrompts = [
   "Atap kamar saya bocor setelah hujan. Area sekitar 15 meter persegi.",
@@ -94,9 +106,7 @@ export function ChatDemo() {
   const [messages, setMessages] = useState(initialMessages);
   const [input, setInput] = useState(samplePrompts[0]);
   const [attachedImage, setAttachedImage] = useState<File | null>(null);
-  const [recommendation, setRecommendation] = useState<Recommendation | null>(
-    buildRecommendation(samplePrompts[0]),
-  );
+  const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [streamingText, setStreamingText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -152,40 +162,58 @@ export function ChatDemo() {
     setRecommendation(null);
 
     const userContent = prompt || "Saya unggah foto masalah rumah.";
-    setMessages((current) => [
-      ...current,
-      {
-        id: createId("user"),
-        role: "user",
-        content: userContent,
-        imageName: attachedImage?.name,
-      },
-    ]);
+    const userMessage: ChatMessage = {
+      id: createId("user"),
+      role: "user",
+      content: userContent,
+      imageName: attachedImage?.name,
+    };
+    const nextMessages = [...messages, userMessage];
 
-    const nextRecommendation = buildRecommendation(
-      `${userContent} ${attachedImage ? "foto kerusakan bangunan" : ""}`,
-    );
-    const responseText = `Diagnosis: ${nextRecommendation.diagnosis} Rekomendasi sudah dihitung dari katalog demo QHomemart dengan subtotal ${formatCurrency(nextRecommendation.subtotal)}.`;
-    const chunks = responseText.match(/.{1,38}(\s|$)/g) ?? [responseText];
+    setMessages(nextMessages);
+    setStreamingText("Memahami kebutuhan dan mengecek data yang masih kurang...");
 
-    for (const chunk of chunks) {
-      await new Promise((resolve) => setTimeout(resolve, 90));
-      setStreamingText((current) => `${current}${chunk}`);
+    try {
+      const response = await fetch("/api/recommendation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: nextMessages }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error ?? "Gagal memproses rekomendasi AI.");
+      }
+
+      const payload = (await response.json()) as RecommendationResponse;
+      const responseText =
+        payload.type === "recommendation"
+          ? `${payload.message} Subtotal: ${formatCurrency(payload.recommendation.subtotal)}.`
+          : payload.message;
+
+      setMessages((current) => [
+        ...current,
+        {
+          id: createId("assistant"),
+          role: "assistant",
+          content: responseText,
+        },
+      ]);
+      setRecommendation(
+        payload.type === "recommendation" ? payload.recommendation : null,
+      );
+      setInput("");
+      setAttachedImage(null);
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Rekomendasi AI belum bisa diproses.",
+      );
+    } finally {
+      setStreamingText("");
+      setIsLoading(false);
     }
-
-    setMessages((current) => [
-      ...current,
-      {
-        id: createId("assistant"),
-        role: "assistant",
-        content: responseText,
-      },
-    ]);
-    setRecommendation(nextRecommendation);
-    setInput("");
-    setAttachedImage(null);
-    setStreamingText("");
-    setIsLoading(false);
   }
 
   async function handleSaveQuote() {
