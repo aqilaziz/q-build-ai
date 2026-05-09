@@ -18,6 +18,38 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
+.admin-input {
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid #cbd3c4;
+  background: #ffffff;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.admin-input:focus {
+  border-color: #174832;
+}
+
+.row-action,
+.row-action-danger {
+  display: inline-flex;
+  height: 32px;
+  width: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid #cbd3c4;
+  background: #ffffff;
+}
+
+.row-action-danger {
+  border-color: #efb8a8;
+  background: #fff4ef;
+  color: #8a321d;
+}
+
 .quote-print-table th {
   background: #edf5ee;
   border: 1px solid #d9ded2;

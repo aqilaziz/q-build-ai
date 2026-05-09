@@ -133,6 +133,7 @@ SUPABASE_PROJECT_REF=ksemrhvevevyjxgdsznw
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+ADMIN_EMAILS=admin@gmail.com
 ```
 
 Variable usage:
@@ -146,6 +147,7 @@ Variable usage:
 - `NEXT_PUBLIC_SUPABASE_URL`: browser-safe Supabase project URL.
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: browser-safe Supabase anon key for public catalog reads and authenticated user calls.
 - `SUPABASE_SERVICE_ROLE_KEY`: server-only key for privileged seed/embedding jobs. Never expose this in client components.
+- `ADMIN_EMAILS`: comma-separated Supabase Auth emails that can access `/admin`.
 
 Optional provider key if Gemini is used later:
 

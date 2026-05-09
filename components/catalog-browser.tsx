@@ -22,6 +22,8 @@ export type CatalogProduct = {
   price: number;
   stock_status: string;
   coverage_note: string | null;
+  image_path?: string | null;
+  image_alt?: string | null;
 };
 
 type CatalogBrowserProps = {
@@ -38,6 +40,14 @@ function categoryLabel(category: string) {
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+function productImageUrl(path?: string | null) {
+  if (!path) return null;
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
+  return baseUrl
+    ? `${baseUrl}/storage/v1/object/public/product-images/${encodeURI(path)}`
+    : null;
 }
 
 export function CatalogBrowser({ products, error }: CatalogBrowserProps) {
@@ -134,6 +144,17 @@ export function CatalogBrowser({ products, error }: CatalogBrowserProps) {
               key={product.id}
               className="rounded-lg border border-[#d9ded2] bg-white p-4"
             >
+              {product.image_path ? (
+                <div className="mb-3 aspect-[4/3] overflow-hidden rounded-md bg-[#edf5ee]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={productImageUrl(product.image_path) ?? ""}
+                    alt={product.image_alt ?? product.name}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ) : null}
+
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase text-[#52645c]">
