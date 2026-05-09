@@ -12,6 +12,7 @@ import {
   Loader2,
   Package,
   PackageCheck,
+  RotateCcw,
   Save,
   Search,
   Send,
@@ -118,6 +119,22 @@ export function ChatDemo() {
     [],
   );
 
+  function handleNewSession() {
+    setMessages(initialMessages);
+    setInput(samplePrompts[0]);
+    setAttachedImage(null);
+    setRecommendation(null);
+    setStreamingText("");
+    setIsLoading(false);
+    setError("");
+    setSavedId("");
+    setSaveState("idle");
+
+    if (imageInputRef.current) {
+      imageInputRef.current.value = "";
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const prompt = input.trim();
@@ -199,6 +216,14 @@ export function ChatDemo() {
               <h1 className="truncate text-lg font-bold">Q-Build AI Demo</h1>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleNewSession}
+                className="inline-flex size-10 items-center justify-center rounded-md border border-[#cbd3c4] bg-white text-[#26342b]"
+                aria-label="Session Baru"
+              >
+                <RotateCcw size={18} />
+              </button>
               <Link
                 href="/catalog"
                 className="inline-flex size-10 items-center justify-center rounded-md border border-[#cbd3c4] bg-white text-[#26342b]"

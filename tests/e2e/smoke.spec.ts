@@ -8,11 +8,25 @@ test.describe("smoke pages", () => {
       page.getByRole("heading", { name: "Q-Build AI Demo" }),
     ).toBeVisible();
     await expect(page.getByLabel("Pesan renovasi")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Session Baru" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Demo login" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Katalog produk" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Kirim" })).toBeVisible();
     await expect(page.getByText("Atap bocor 15 m2")).toBeVisible();
     await expect(page.getByText("Agent Workflow Trace")).toBeVisible();
+  });
+
+  test("home can start a new local chat session", async ({ page }) => {
+    await page.goto("/");
+
+    await expect(page.getByText("Atap bocor 15 m2")).toBeVisible();
+    await page.getByRole("button", { name: "Session Baru" }).click();
+
+    await expect(page.getByText("Belum ada hasil")).toBeVisible();
+    await expect(page.getByText("Atap bocor 15 m2")).toHaveCount(0);
+    await expect(page.getByLabel("Pesan renovasi")).toHaveValue(
+      "Atap kamar saya bocor setelah hujan. Area sekitar 15 meter persegi.",
+    );
   });
 
   test("catalog shows searchable product data", async ({ page }) => {
