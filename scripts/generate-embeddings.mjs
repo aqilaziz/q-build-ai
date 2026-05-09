@@ -5,20 +5,22 @@ const BATCH_SIZE = 16;
 const force = process.argv.includes("--force");
 
 const embeddingApiKey =
-  process.env.AI_EMBEDDING_API_KEY ??
-  process.env.AI_API_KEY ??
-  process.env.OPENAI_API_KEY;
+  optionalEnv("AI_EMBEDDING_API_KEY") ??
+  optionalEnv("AI_API_KEY") ??
+  optionalEnv("OPENAI_API_KEY");
 const embeddingBaseUrl =
-  process.env.AI_EMBEDDING_BASE_URL ??
-  process.env.AI_BASE_URL ??
-  process.env.OPENAI_BASE_URL ??
+  optionalEnv("AI_EMBEDDING_BASE_URL") ??
+  optionalEnv("AI_BASE_URL") ??
+  optionalEnv("OPENAI_BASE_URL") ??
   "https://api.openai.com/v1";
 const hasCustomAIConfig = Boolean(
-  process.env.AI_BASE_URL || process.env.AI_API_KEY || process.env.AI_MODEL
+  optionalEnv("AI_BASE_URL") ||
+    optionalEnv("AI_API_KEY") ||
+    optionalEnv("AI_MODEL"),
 );
 const embeddingModel =
-  process.env.AI_EMBEDDING_MODEL ??
-  process.env.OPENAI_EMBEDDING_MODEL ??
+  optionalEnv("AI_EMBEDDING_MODEL") ??
+  optionalEnv("OPENAI_EMBEDDING_MODEL") ??
   (hasCustomAIConfig ? undefined : "text-embedding-3-small");
 
 if (!embeddingApiKey || !embeddingModel) {
@@ -107,4 +109,9 @@ async function createEmbeddings(input) {
 
 function withoutTrailingSlash(value) {
   return value.replace(/\/+$/, "");
+}
+
+function optionalEnv(name) {
+  const value = process.env[name]?.trim();
+  return value || undefined;
 }
