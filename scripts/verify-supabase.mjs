@@ -15,7 +15,8 @@ console.log(`Supabase target: ${supabaseUrl}`);
 
 const { count, error: productsError } = await supabase
   .from("products")
-  .select("id", { count: "exact", head: true });
+  .select("id", { count: "exact" })
+  .limit(1);
 
 if (productsError) {
   console.error("Products table check failed:", formatSupabaseError(productsError));
