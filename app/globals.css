@@ -17,3 +17,93 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+.quote-print-table th {
+  background: #edf5ee;
+  border: 1px solid #d9ded2;
+  color: #26342b;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 10px;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.quote-print-table td {
+  border: 1px solid #e1e5dc;
+  padding: 12px 10px;
+  vertical-align: top;
+}
+
+.quote-print-table th:nth-child(2),
+.quote-print-table th:nth-child(3),
+.quote-print-table th:nth-child(4),
+.quote-print-table td:nth-child(2),
+.quote-print-table td:nth-child(3),
+.quote-print-table td:nth-child(4) {
+  text-align: right;
+}
+
+@media print {
+  @page {
+    margin: 14mm;
+    size: A4;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .quote-print-page {
+    background: #ffffff !important;
+    min-height: auto !important;
+  }
+
+  .quote-print-page > div {
+    max-width: none !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  .quote-document {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  .quote-hero {
+    background: #143f2d !important;
+    border-radius: 0 0 10px 10px !important;
+    color: #ffffff !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .quote-mobile-items {
+    display: none !important;
+  }
+
+  .quote-print-table {
+    display: table !important;
+  }
+
+  .quote-print-table tr,
+  .quote-document section,
+  .quote-document aside {
+    break-inside: avoid;
+  }
+
+  .quote-document section,
+  .quote-document aside {
+    border-color: #d1d5db !important;
+    box-shadow: none !important;
+  }
+}

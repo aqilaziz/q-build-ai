@@ -55,4 +55,19 @@ test.describe("smoke pages", () => {
     await expect(page.getByLabel("Password")).toHaveValue("password-demo");
     await expect(page.getByRole("link", { name: "Lanjut mode demo" })).toBeVisible();
   });
+
+  test("quote detail can export a professional PDF layout", async ({ page }) => {
+    await page.route("**/api/quotes/demo-roof-leak", async (route) => {
+      await route.abort();
+    });
+
+    await page.goto("/quotes/demo-roof-leak");
+
+    await expect(
+      page.getByRole("heading", { name: "Q-Build AI Quotation" }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Export PDF" })).toBeVisible();
+    await expect(page.getByText("Estimasi subtotal")).toBeVisible();
+    await expect(page.getByText("Produk dan quantity")).toBeVisible();
+  });
 });
