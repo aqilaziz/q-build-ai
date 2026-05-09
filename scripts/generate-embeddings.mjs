@@ -1,15 +1,31 @@
 import { productEmbeddingText } from "./product-data.mjs";
 import { createServiceSupabaseClient, resolveSupabaseUrl } from "./supabase-env.mjs";
 
-const EMBEDDING_MODEL = "text-embedding-3-small";
 const BATCH_SIZE = 16;
 const force = process.argv.includes("--force");
 
-const openAiKey = process.env.OPENAI_API_KEY;
+const embeddingApiKey =
+  process.env.AI_EMBEDDING_API_KEY ??
+  process.env.AI_API_KEY ??
+  process.env.OPENAI_API_KEY;
+const embeddingBaseUrl =
+  process.env.AI_EMBEDDING_BASE_URL ??
+  process.env.AI_BASE_URL ??
+  process.env.OPENAI_BASE_URL ??
+  "https://api.openai.com/v1";
+const hasCustomAIConfig = Boolean(
+  process.env.AI_BASE_URL || process.env.AI_API_KEY || process.env.AI_MODEL
+);
+const embeddingModel =
+  process.env.AI_EMBEDDING_MODEL ??
+  process.env.OPENAI_EMBEDDING_MODEL ??
+  (hasCustomAIConfig ? undefined : "text-embedding-3-small");
 
-if (!openAiKey) {
-  console.error("Missing OPENAI_API_KEY.");
-  process.exit(1);
+if (!embeddingApiKey || !embeddingModel) {
+  console.log(
+    "Embedding env belum dikonfigurasi. Lewati generate embeddings; runtime akan memakai fallback keyword search.",
+  );
+  process.exit(0);
 }
 
 let supabase;
@@ -68,14 +84,14 @@ for (let start = 0; start < products.length; start += BATCH_SIZE) {
 }
 
 async function createEmbeddings(input) {
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
+  const response = await fetch(`${withoutTrailingSlash(embeddingBaseUrl)}/embeddings`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${openAiKey}`,
+      Authorization: `Bearer ${embeddingApiKey}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: EMBEDDING_MODEL,
+      model: embeddingModel,
       input
     })
   });
@@ -87,4 +103,8 @@ async function createEmbeddings(input) {
 
   const json = await response.json();
   return json.data.sort((a, b) => a.index - b.index);
+}
+
+function withoutTrailingSlash(value) {
+  return value.replace(/\/+$/, "");
 }
