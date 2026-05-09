@@ -1,0 +1,266 @@
+# Q-Build AI
+
+Q-Build AI is a mobile-first renovation shopping agent for the QHomemart AI Agent Competition. It helps customers move from a vague home repair problem to grounded product recommendations, material quantities, cost estimates, and a saved quotation.
+
+## Problem
+
+Home-improvement customers often know the symptom but not the right material, quantity, or budget. A customer might say:
+
+```text
+Atap kamar saya bocor setelah hujan. Area sekitar 15 meter persegi. Saya harus beli apa?
+```
+
+Without assistance, they must translate that problem into product categories, coverage calculations, supporting tools, and a shopping list. This slows decisions and increases the support burden for store staff.
+
+## Solution
+
+Q-Build AI works as a repair and shopping assistant:
+
+- diagnoses a home repair need from Indonesian text or an uploaded photo
+- retrieves relevant QHomemart-style products from Supabase catalog data
+- calculates material needs with deterministic tools instead of free-form model guesses
+- estimates subtotal from selected catalog products
+- saves the result as a quotation/shopping list for later review
+
+The MVP is intentionally narrow: roof leak/waterproofing and wall repainting are the primary demo flows.
+
+## Architecture
+
+```text
+Browser
+  -> Next.js App Router UI
+  -> /api/chat
+     -> Vercel AI SDK streamText
+     -> AI tools:
+        - searchProducts
+        - calculateWaterproofing / calculatePaint / calculateTiles
+        - calculateSubtotal / calculateInstallment
+        - saveQuotation
+     -> Supabase Postgres + pgvector
+     -> OpenAI model
+```
+
+Core principles:
+
+- Product facts come from Supabase, not the LLM.
+- Numeric outputs come from calculator tools.
+- Secret keys stay server-side.
+- Public catalog rows are readable, user quotations are protected by RLS.
+- Demo must work well on mobile.
+
+## Tech Stack
+
+- Next.js App Router
+- TypeScript
+- Tailwind CSS
+- Vercel AI SDK
+- OpenAI model and embeddings
+- Supabase Auth, Postgres, RLS, and pgvector
+- Vercel deployment
+
+## Repository Map
+
+```text
+app/                         Next.js routes and UI
+specs/001-q-build-ai-agent/  Local feature specs and quickstart
+docs/                        QA and demo acceptance checklists
+.github/workflows/           CI workflow
+```
+
+Primary source-of-truth specs:
+
+1. `specs/001-q-build-ai-agent/spec.md`
+2. `specs/001-q-build-ai-agent/plan.md`
+3. `specs/001-q-build-ai-agent/data-model.md`
+4. `specs/001-q-build-ai-agent/tasks.md`
+5. `specs/001-q-build-ai-agent/quickstart.md`
+
+## Local Setup
+
+Prerequisites:
+
+- Node.js 20+
+- npm
+- Supabase project for full AI/RAG and quotation features
+- OpenAI API key for chat and embeddings
+
+Install and run:
+
+```powershell
+npm ci
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+Run checks:
+
+```powershell
+npm run lint
+npm run build
+```
+
+## Environment Variables
+
+Create `.env.local` from `.env.example`.
+
+```env
+OPENAI_API_KEY=
+SUPABASE_PROJECT_REF=ksemrhvevevyjxgdsznw
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+Variable usage:
+
+- `OPENAI_API_KEY`: server-side chat and embedding calls.
+- `SUPABASE_PROJECT_REF`: hosted Supabase project ref. Defaults to `ksemrhvevevyjxgdsznw` in scripts when URL is omitted.
+- `NEXT_PUBLIC_SUPABASE_URL`: browser-safe Supabase project URL.
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: browser-safe Supabase anon key for public catalog reads and authenticated user calls.
+- `SUPABASE_SERVICE_ROLE_KEY`: server-only key for privileged seed/embedding jobs. Never expose this in client components.
+
+Optional provider key if Gemini is used later:
+
+```env
+GOOGLE_GENERATIVE_AI_API_KEY=
+```
+
+## Supabase Migration and Seed
+
+Expected database capabilities:
+
+- enable `vector` extension
+- create product catalog table with embedding column
+- create projects, quotations, quotation items, and chat message tables
+- enable RLS on public tables
+- allow public read only for in-stock products
+- restrict quotation/project/history rows to `auth.uid()`
+- create `match_products` RPC for pgvector product search
+
+The anon key and service role key are API keys, not database owner credentials. They can verify the REST API and seed data after tables exist, but they cannot apply DDL migrations such as `create extension`, `create table`, RLS policies, or indexes.
+
+Hosted production project:
+
+```text
+ksemrhvevevyjxgdsznw
+```
+
+Apply migrations to the hosted project with Supabase CLI from the repository root:
+
+```powershell
+$env:SUPABASE_ACCESS_TOKEN="<supabase-personal-access-token>"
+$env:SUPABASE_DB_PASSWORD="<database-password>"
+supabase link --project-ref ksemrhvevevyjxgdsznw --password $env:SUPABASE_DB_PASSWORD
+supabase db push --password $env:SUPABASE_DB_PASSWORD
+supabase migration list --password $env:SUPABASE_DB_PASSWORD
+```
+
+`supabase db push` can also include `--include-seed` because `supabase/config.toml` points to `supabase/seed.sql`. For production, the safer repeatable data path is to apply schema first, then run the service-role seed script below.
+
+Manual Dashboard alternative:
+
+1. Open Supabase Dashboard for project `ksemrhvevevyjxgdsznw`.
+2. Go to SQL Editor.
+3. Run `supabase/migrations/20260509193646_init_q_build_ai_schema.sql`.
+4. Run `supabase/seed.sql`, or use the service-role seed command below.
+
+Seed requirements for the competition demo:
+
+- at least 20 QHomemart-style products
+- categories include waterproofing, paint, pipe, tile, cement, and tools
+- embeddings generated with one consistent model, planned as `text-embedding-3-small`
+- waterproofing search for `atap bocor 15 meter` returns anti-bocor, membrane/fiber, and roller/brush options
+
+If a seed script is added, the expected command is:
+
+```powershell
+npm run supabase:verify
+npm run seed:products
+npm run supabase:verify
+```
+
+The verify and seed scripts are non-DDL. They use `SUPABASE_SERVICE_ROLE_KEY` plus either `NEXT_PUBLIC_SUPABASE_URL`/`SUPABASE_URL`, or derive the hosted URL from `SUPABASE_PROJECT_REF`.
+
+## Demo Script
+
+Target duration: under 2 minutes.
+
+1. Open the Vercel URL or local app on a phone-size viewport.
+2. Sign in or use the prepared demo session.
+3. Send:
+
+   ```text
+   Atap kamar saya bocor setelah hujan deras. Luas area sekitar 15 meter persegi. Saya harus beli apa dan kira-kira habis berapa?
+   ```
+
+4. Show that the assistant classifies the issue as waterproofing/roof leak.
+5. Show catalog-grounded products: waterproofing, membrane/fiber reinforcement, and roller/brush.
+6. Show calculator output for 15 m2 waterproofing: 2 coats x 1 kg/m2/coat = 30 kg.
+7. Show subtotal based on product prices, not guessed text.
+8. Save the recommendation as a quotation.
+9. Open quote history and reopen the saved quotation.
+10. Explain business value: faster customer decision, larger relevant basket, and less repetitive staff triage.
+
+## Manual QA
+
+Use [docs/qa-manual-acceptance.md](docs/qa-manual-acceptance.md) before demo submission. It covers:
+
+- atap bocor 15 m2 recommendation flow
+- save quotation flow
+- quote history and reopen flow
+
+## Sample Prompts
+
+Primary:
+
+```text
+Atap kamar saya bocor setelah hujan deras. Luas area sekitar 15 meter persegi. Saya harus beli apa dan kira-kira habis berapa?
+```
+
+Repainting:
+
+```text
+Dinding kamar 3 x 4 meter mulai kusam. Saya ingin cat ulang dua lapis, produk apa yang cocok?
+```
+
+Clarification test:
+
+```text
+Tembok rumah saya rembes. Saya belum tahu luasnya.
+```
+
+Image diagnosis:
+
+```text
+Saya upload foto plafon bernoda air. Tolong cek kemungkinan masalah dan daftar belanja yang perlu disiapkan.
+```
+
+Unavailable product guardrail:
+
+```text
+Saya butuh bahan khusus yang tidak ada di katalog. Apakah ada rekomendasi?
+```
+
+## Judging Criteria Mapping
+
+| Criteria | How Q-Build AI demonstrates it |
+| --- | --- |
+| Innovation | Combines image/text diagnosis, RAG product search, and tool-using material calculation in one shopping agent. |
+| Usefulness | Converts a real home repair symptom into products, quantities, subtotal, and a saved shopping plan. |
+| Technical quality | Uses Next.js App Router, Vercel AI SDK tools, Supabase pgvector, RLS, and deterministic calculators. |
+| Business impact | Helps QHomemart customers decide faster and gives staff a repeatable quotation workflow. |
+| Demo quality | Mobile-first flow with a narrow, predictable roof leak scenario and manual QA checklist. |
+
+## Acceptance Targets
+
+- First useful assistant response appears within 5 seconds on a normal connection.
+- Primary roof leak demo completes in under 2 minutes.
+- Recommendations are grounded in seeded catalog products.
+- 15 m2 waterproofing returns 30 kg before packaging round-up.
+- Authenticated user can save and reopen a quotation.
+- User-owned quotation data is not visible to other users.
