@@ -5,6 +5,21 @@ import type { ProductSearchResult } from "@/types/domain";
 
 const FALLBACK_SEARCH_ROW_LIMIT = 100;
 
+type SearchMode = "semantic" | "keyword_fallback";
+
+type FallbackReason =
+  | "embedding_model_unavailable"
+  | "semantic_no_matches"
+  | "semantic_error";
+
+export type ProductSearchResponse = {
+  products: ProductSearchResult[];
+  count: number;
+  searchMode: SearchMode;
+  semanticAvailable: boolean;
+  fallbackReason?: FallbackReason;
+};
+
 type MatchProductRow = {
   id: string;
   name: string;
@@ -30,27 +45,58 @@ export async function searchProducts({
   query: string;
   category?: string | null;
   limit?: number;
-}): Promise<{ products: ProductSearchResult[]; count: number }> {
+}): Promise<ProductSearchResponse> {
   const cleanQuery = query.trim();
   if (!cleanQuery) {
-    return { products: [], count: 0 };
+    return {
+      products: [],
+      count: 0,
+      searchMode: "keyword_fallback",
+      semanticAvailable: false,
+      fallbackReason: "embedding_model_unavailable",
+    };
   }
 
-  const semanticResult = await searchProductsByEmbedding({
-    query: cleanQuery,
-    category,
-    limit,
-  }).catch(() => null);
+  let fallbackReason: FallbackReason = "embedding_model_unavailable";
+  let semanticAvailable = false;
 
-  if (semanticResult?.products.length) {
-    return semanticResult;
+  try {
+    const semanticResult = await searchProductsByEmbedding({
+      query: cleanQuery,
+      category,
+      limit,
+    });
+
+    if (semanticResult) {
+      semanticAvailable = true;
+
+      if (semanticResult.products.length) {
+        return {
+          ...semanticResult,
+          searchMode: "semantic",
+          semanticAvailable,
+        };
+      }
+
+      fallbackReason = "semantic_no_matches";
+    }
+  } catch {
+    semanticAvailable = true;
+    fallbackReason = "semantic_error";
   }
 
-  return searchProductsByKeyword({
+  const keywordResult = await searchProductsByKeyword({
     query: cleanQuery,
     category,
     limit,
   });
+
+  return {
+    ...keywordResult,
+    searchMode: "keyword_fallback",
+    semanticAvailable,
+    fallbackReason,
+  };
 }
 
 async function searchProductsByEmbedding({

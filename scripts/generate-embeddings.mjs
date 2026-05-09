@@ -66,10 +66,26 @@ if (!products?.length) {
 for (let start = 0; start < products.length; start += BATCH_SIZE) {
   const batch = products.slice(start, start + BATCH_SIZE);
   const inputs = batch.map(productEmbeddingText);
-  const embeddings = await createEmbeddings(inputs);
+  let embeddings;
+  try {
+    embeddings = await createEmbeddings(inputs);
+  } catch (error) {
+    console.error("Failed to create embeddings:", error.message);
+    process.exit(1);
+  }
+
+  if (embeddings.length !== batch.length) {
+    console.error(`Embedding API returned ${embeddings.length} vectors for ${batch.length} products.`);
+    process.exit(1);
+  }
 
   for (const item of embeddings) {
     const product = batch[item.index];
+    if (!product || !Array.isArray(item.embedding) || item.embedding.length === 0) {
+      console.error("Embedding API returned an invalid embedding item.");
+      process.exit(1);
+    }
+
     const vectorLiteral = `[${item.embedding.join(",")}]`;
     const { error: updateError } = await supabase
       .from("products")
@@ -84,6 +100,8 @@ for (let start = 0; start < products.length; start += BATCH_SIZE) {
 
   console.log(`Embedded ${Math.min(start + BATCH_SIZE, products.length)} / ${products.length} products.`);
 }
+
+console.log(`Embedding generation complete for ${products.length} products.`);
 
 async function createEmbeddings(input) {
   const response = await fetch(`${withoutTrailingSlash(embeddingBaseUrl)}/embeddings`, {

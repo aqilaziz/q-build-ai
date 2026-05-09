@@ -40,6 +40,8 @@ type QuoteItem = {
   lineTotal: number;
 };
 
+type ProductSearch = Awaited<ReturnType<typeof searchProducts>>;
+
 const fallbackQuestions: Record<string, string> = {
   problem: "Boleh jelaskan masalahnya dulu? Contohnya atap bocor, cat ulang dinding, pipa bocor, atau pasang keramik.",
   areaM2: "Berapa luas area yang dikerjakan dalam m2? Kalau belum pasti, boleh estimasi panjang x lebar.",
@@ -267,6 +269,26 @@ function parsePackSize(product: ProductSearchResult, fallback: number) {
   return match ? Number(match[1].replace(",", ".")) : fallback;
 }
 
+function describeRetrievalMode(result: ProductSearch) {
+  if (result.searchMode === "semantic") {
+    return "semantic match_products";
+  }
+
+  const reasons: Record<NonNullable<ProductSearch["fallbackReason"]>, string> = {
+    embedding_model_unavailable: "embedding tidak tersedia",
+    semantic_no_matches: "semantic kosong",
+    semantic_error: "semantic error",
+  };
+
+  return `keyword fallback (${reasons[result.fallbackReason ?? "embedding_model_unavailable"]})`;
+}
+
+function summarizeRetrieval(searches: ProductSearch[]) {
+  const count = searches.reduce((total, search) => total + search.count, 0);
+  const modes = searches.map(describeRetrievalMode).join("; ");
+  return `Ditemukan ${count} kandidat produk dari katalog Supabase. Mode retrieval: ${modes}.`;
+}
+
 function buildAgentTrace({
   problem,
   diagnosis,
@@ -383,7 +405,7 @@ async function buildPaintRecommendation(intake: Intake) {
       agentTrace: buildAgentTrace({
         problem: intake.problemSummary,
         diagnosis,
-        retrieval: `Ditemukan ${paintSearch.count + toolSearch.count} kandidat produk dari katalog Supabase.`,
+        retrieval: summarizeRetrieval([paintSearch, toolSearch]),
         calculator: paintCalc.explanation,
         quotation: `${items.length} item dengan subtotal ${formatCurrency(subtotal)}.`,
         validation: "Area, warna, preferensi budget, item utama, item pendukung, dan subtotal sudah dicek.",
@@ -477,7 +499,7 @@ async function buildWaterproofingRecommendation(intake: Intake) {
       agentTrace: buildAgentTrace({
         problem: intake.problemSummary,
         diagnosis,
-        retrieval: `Ditemukan ${productSearch.count + toolSearch.count} kandidat produk dari katalog Supabase.`,
+        retrieval: summarizeRetrieval([productSearch, toolSearch]),
         calculator: calc.explanation,
         quotation: `${items.length} item dengan subtotal ${formatCurrency(subtotal)}.`,
         validation: "Area, preferensi budget, produk utama, item pendukung, pembulatan kemasan, dan subtotal sudah dicek.",

@@ -133,6 +133,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 Variable usage:
 
 - `OPENAI_API_KEY`: server-side chat and embedding calls.
+- `AI_EMBEDDING_API_KEY` / `AI_EMBEDDING_MODEL` / `AI_EMBEDDING_BASE_URL`: optional override for product embedding generation and runtime semantic search. For Sumopod, set `AI_EMBEDDING_MODEL=text-embedding-3-small`; `AI_EMBEDDING_API_KEY` and `AI_EMBEDDING_BASE_URL` can be omitted so they inherit `AI_API_KEY` and `AI_BASE_URL`.
 - `SUPABASE_PROJECT_REF`: hosted Supabase project ref. Defaults to `ksemrhvevevyjxgdsznw` in scripts when URL is omitted.
 - `NEXT_PUBLIC_SUPABASE_URL`: browser-safe Supabase project URL.
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: browser-safe Supabase anon key for public catalog reads and authenticated user calls.
@@ -190,15 +191,20 @@ Seed requirements for the competition demo:
 - embeddings generated with one consistent model, planned as `text-embedding-3-small`
 - waterproofing search for `atap bocor 15 meter` returns anti-bocor, membrane/fiber, and roller/brush options
 
-If a seed script is added, the expected command is:
+Use the service-role scripts from the repository root after the schema exists:
 
 ```powershell
-npm run supabase:verify
+npm run supabase:verify -- --allow-missing-embeddings
 npm run seed:products
+npm run embeddings:products
 npm run supabase:verify
 ```
 
-The verify and seed scripts are non-DDL. They use `SUPABASE_SERVICE_ROLE_KEY` plus either `NEXT_PUBLIC_SUPABASE_URL`/`SUPABASE_URL`, or derive the hosted URL from `SUPABASE_PROJECT_REF`.
+`npm run embeddings:products` generates pgvector embeddings for in-stock products that do not have one yet. Use `npm run embeddings:products -- --force` to regenerate all in-stock product embeddings with the currently configured embedding model. Production runtime also needs `AI_EMBEDDING_MODEL=text-embedding-3-small`, otherwise the app will fall back to keyword search.
+
+The final `npm run supabase:verify` is strict: it reports total products, in-stock products, in-stock products with embeddings, and fails if semantic RAG is not ready because any in-stock product is missing an embedding. The `--allow-missing-embeddings` mode is only for early schema/connectivity checks before seed or embedding generation.
+
+The verify, seed, and embedding scripts are non-DDL. They use `SUPABASE_SERVICE_ROLE_KEY` plus either `NEXT_PUBLIC_SUPABASE_URL`/`SUPABASE_URL`, or derive the hosted URL from `SUPABASE_PROJECT_REF`.
 
 ## Demo Script
 
