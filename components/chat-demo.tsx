@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   ListChecks,
   Loader2,
+  Package,
   PackageCheck,
   Save,
   Search,
@@ -198,6 +199,13 @@ export function ChatDemo() {
               <h1 className="truncate text-lg font-bold">Q-Build AI Demo</h1>
             </div>
             <div className="flex items-center gap-2">
+              <Link
+                href="/catalog"
+                className="inline-flex size-10 items-center justify-center rounded-md border border-[#cbd3c4] bg-white text-[#26342b]"
+                aria-label="Katalog produk"
+              >
+                <Package size={19} />
+              </Link>
               <Link
                 href="/quotes"
                 className="inline-flex size-10 items-center justify-center rounded-md border border-[#cbd3c4] bg-white text-[#26342b]"

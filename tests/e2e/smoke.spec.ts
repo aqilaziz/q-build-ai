@@ -9,9 +9,24 @@ test.describe("smoke pages", () => {
     ).toBeVisible();
     await expect(page.getByLabel("Pesan renovasi")).toBeVisible();
     await expect(page.getByRole("link", { name: "Demo login" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Katalog produk" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Kirim" })).toBeVisible();
     await expect(page.getByText("Atap bocor 15 m2")).toBeVisible();
     await expect(page.getByText("Agent Workflow Trace")).toBeVisible();
+  });
+
+  test("catalog shows searchable product data", async ({ page }) => {
+    await page.goto("/catalog");
+
+    await expect(
+      page.getByRole("heading", { name: "Katalog produk" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Cari katalog")).toBeVisible();
+    await expect(page.getByLabel("Filter kategori")).toBeVisible();
+    await expect(page.getByText("QHM RoofSeal Waterproof Coating 20kg")).toBeVisible();
+
+    await page.getByLabel("Cari katalog").fill("primer");
+    await expect(page.getByText("QHM Alkali Sealer Primer 2.5L")).toBeVisible();
   });
 
   test("quotes shows saved quotations", async ({ page }) => {
