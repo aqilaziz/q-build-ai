@@ -1,4 +1,4 @@
-import { generateObject, type ModelMessage } from "ai";
+import { generateObject, generateText, type ModelMessage } from "ai";
 import { z } from "zod";
 import { calculatePaint, calculateSubtotal, calculateWaterproofing } from "@/lib/calculators";
 import { searchProducts } from "@/lib/ai/products";
@@ -179,6 +179,10 @@ function toModelMessages(messages: RequestMessage[], transcript: string): ModelM
   });
 }
 
+function hasImage(messages: RequestMessage[]) {
+  return messages.some((message) => Boolean(message.imageDataUrl));
+}
+
 function requiredMissingFields(intake: Intake) {
   const missing = new Set(intake.missingFields);
 
@@ -234,6 +238,20 @@ Aturan intent:
   });
 
   return object;
+}
+
+async function describeImage(messages: RequestMessage[]) {
+  const transcript = toTranscript(messages);
+  const { text } = await generateText({
+    model: getChatModel(),
+    temperature: 0.2,
+    maxOutputTokens: 220,
+    system:
+      "Anda membantu membaca foto masalah rumah. Jawab singkat dalam Bahasa Indonesia. Jika foto tidak jelas, katakan tidak jelas.",
+    messages: toModelMessages(messages, transcript),
+  });
+
+  return text.trim();
 }
 
 function chooseByBudget(products: ProductSearchResult[], budgetPreference: Intake["budgetPreference"]) {
@@ -482,7 +500,24 @@ export async function POST(request: Request) {
       return unavailableResponse();
     }
 
-    const intake = await analyzeIntake(messages);
+    let intake: Intake;
+    try {
+      intake = await analyzeIntake(messages);
+    } catch (error) {
+      if (hasImage(messages)) {
+        const imageSummary = await describeImage(messages).catch(
+          () => "Foto sudah diterima, tetapi detail kerusakan belum cukup jelas.",
+        );
+
+        return Response.json({
+          type: "clarification",
+          message: `${imageSummary} Berapa luas area yang terdampak dan apa target pekerjaan Anda?`,
+          aiProvider: "sumopod",
+        });
+      }
+
+      throw error;
+    }
     if (hasNoPreference(messages) && !intake.budgetPreference) {
       intake.budgetPreference = "standard";
     }
