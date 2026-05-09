@@ -1,6 +1,6 @@
 import { generateObject, generateText, type ModelMessage } from "ai";
 import { z } from "zod";
-import { calculatePaint, calculateSubtotal, calculateWaterproofing } from "@/lib/calculators";
+import { calculatePaint, calculateSubtotal, calculateTiles, calculateWaterproofing } from "@/lib/calculators";
 import { searchProducts } from "@/lib/ai/products";
 import { getChatModel } from "@/lib/ai/provider";
 import type { ProductSearchResult } from "@/types/domain";
@@ -112,6 +112,13 @@ function normalizeText(value: string) {
   return value.toLowerCase();
 }
 
+function userText(messages: RequestMessage[]) {
+  return messages
+    .filter((message) => message.role === "user")
+    .map((message) => message.content)
+    .join(" ");
+}
+
 function hasNoPreference(messages: RequestMessage[]) {
   const lastUserText = messages
     .filter((message) => message.role === "user")
@@ -193,9 +200,15 @@ function requiredMissingFields(intake: Intake) {
     missing.add("areaM2");
   }
   if (intake.intent === "paint" && !intake.color) missing.add("color");
-  if (!intake.budgetPreference && !intake.maxBudget && ["waterproofing", "paint"].includes(intake.intent)) {
+  if (!intake.budgetPreference && !intake.maxBudget && ["waterproofing", "paint", "tiles"].includes(intake.intent)) {
     missing.add("budgetPreference");
   }
+
+  if (intake.areaM2) missing.delete("areaM2");
+  if (intake.color) missing.delete("color");
+  if (intake.budgetPreference || intake.maxBudget) missing.delete("budgetPreference");
+  if (intake.qualityPreference) missing.delete("qualityPreference");
+  if (intake.intent !== "unknown") missing.delete("problem");
 
   return [...missing].filter((field) =>
     ["problem", "areaM2", "color", "budgetPreference", "qualityPreference"].includes(field),
@@ -240,6 +253,53 @@ Aturan intent:
   });
 
   return object;
+}
+
+function fallbackAnalyzeIntake(messages: RequestMessage[]): Intake {
+  const text = normalizeText(userText(messages));
+  const areaMatch = text.match(/(\d+(?:[.,]\d+)?)\s*(m2|m²|meter persegi|meter|m)\b/i);
+  const budgetPreference = /\bpremium|terbaik|bagus|tahan lama\b/i.test(text)
+    ? "premium"
+    : /\bekonomis|murah|hemat|budget\b/i.test(text)
+      ? "economy"
+      : /\bstandar|standard|sedang|biasa|tidak ada|bebas|terserah\b/i.test(text)
+        ? "standard"
+        : null;
+
+  const intent: Intake["intent"] = /keramik|ubin|tile|lantai/i.test(text)
+    ? "tiles"
+    : /cat|warna|tembok|dinding/i.test(text)
+      ? "paint"
+      : /atap|dak|bocor|rembes|waterproof/i.test(text)
+        ? "waterproofing"
+        : /pipa|plumbing|saluran/i.test(text)
+          ? "plumbing"
+          : detectUnsupportedRequest(messages)
+            ? "unknown"
+            : "unknown";
+
+  const problemSummary =
+    intent === "tiles"
+      ? "Pemasangan keramik"
+      : intent === "paint"
+        ? "Pengecatan dinding"
+        : intent === "waterproofing"
+          ? "Atap atau dak bocor"
+          : "Kebutuhan belum jelas";
+
+  return {
+    intent,
+    problemSummary,
+    areaM2: areaMatch ? Number(areaMatch[1].replace(",", ".")) : null,
+    color: null,
+    budgetPreference,
+    maxBudget: null,
+    qualityPreference: budgetPreference,
+    location: null,
+    missingFields: [],
+    nextQuestion: null,
+    confidence: 0.55,
+  };
 }
 
 async function describeImage(messages: RequestMessage[]) {
@@ -509,6 +569,109 @@ async function buildWaterproofingRecommendation(intake: Intake) {
   };
 }
 
+async function buildTilesRecommendation(intake: Intake) {
+  const areaM2 = intake.areaM2 ?? 0;
+  const productSearch = await searchProducts({
+    query: `keramik lantai ceramic tile adhesive grout spacer ${intake.qualityPreference ?? ""}`,
+    category: "tiles",
+    limit: 8,
+  });
+  const tile = chooseByBudget(
+    productSearch.products.filter((product) => /tile|ceramic|keramik/i.test(product.name)),
+    intake.budgetPreference,
+  )[0] ?? productSearch.products[0];
+  const adhesive = productSearch.products.find((product) => /adhesive|lem/i.test(product.name));
+  const grout = productSearch.products.find((product) => /grout|nat/i.test(product.name));
+  const spacer = productSearch.products.find((product) => /spacer/i.test(product.name));
+
+  if (!tile) throw new Error("Produk keramik tidak ditemukan di katalog.");
+
+  const boxCoverageM2 = 1.44;
+  const tileCalc = calculateTiles({ areaM2, wastePercent: 10, boxCoverageM2 });
+  const boxes = tileCalc.boxes ?? Math.ceil(tileCalc.requiredAreaM2 / boxCoverageM2);
+  const items: QuoteItem[] = [
+    {
+      id: tile.id,
+      name: tile.name,
+      category: tile.category,
+      quantity: boxes,
+      unit: tile.unit,
+      unitPrice: tile.price,
+      reason: `Keramik utama untuk area ${areaM2} m2 plus waste 10%.`,
+      lineTotal: boxes * tile.price,
+    },
+  ];
+
+  if (adhesive) {
+    const adhesiveQty = Math.ceil(areaM2 / 5);
+    items.push({
+      id: adhesive.id,
+      name: adhesive.name,
+      category: adhesive.category,
+      quantity: adhesiveQty,
+      unit: adhesive.unit,
+      unitPrice: adhesive.price,
+      reason: "Perekat keramik, estimasi 1 bag untuk sekitar 5 m2.",
+      lineTotal: adhesiveQty * adhesive.price,
+    });
+  }
+
+  if (grout) {
+    const groutQty = Math.max(1, Math.ceil(areaM2 / 10));
+    items.push({
+      id: grout.id,
+      name: grout.name,
+      category: grout.category,
+      quantity: groutQty,
+      unit: grout.unit,
+      unitPrice: grout.price,
+      reason: "Nat untuk mengisi celah antar keramik.",
+      lineTotal: groutQty * grout.price,
+    });
+  }
+
+  if (spacer) {
+    items.push({
+      id: spacer.id,
+      name: spacer.name,
+      category: spacer.category,
+      quantity: 1,
+      unit: spacer.unit,
+      unitPrice: spacer.price,
+      reason: "Spacer membantu jarak nat rapi dan konsisten.",
+      lineTotal: spacer.price,
+    });
+  }
+
+  const subtotal = calculateSubtotal(items).subtotal;
+  const diagnosis = `Kebutuhan diklasifikasikan sebagai pemasangan keramik. Area ${areaM2} m2, preferensi ${intake.budgetPreference ?? "standar"}.`;
+
+  return {
+    message: `Saya sudah punya data cukup: area ${areaM2} m2 dan preferensi ${intake.budgetPreference ?? "standar"}. Berikut rekomendasi keramik berbasis katalog dan subtotalnya.`,
+    recommendation: {
+      title: `Pemasangan keramik ${areaM2} m2`,
+      problemSummary: intake.problemSummary,
+      diagnosis,
+      items,
+      breakdown: [
+        { label: "Area", value: `${areaM2} m2` },
+        { label: "Preferensi", value: intake.budgetPreference ?? "standar" },
+        { label: "Kebutuhan keramik", value: tileCalc.explanation },
+        { label: "Subtotal", value: formatCurrency(subtotal) },
+      ],
+      agentTrace: buildAgentTrace({
+        problem: intake.problemSummary,
+        diagnosis,
+        retrieval: summarizeRetrieval([productSearch]),
+        calculator: tileCalc.explanation,
+        quotation: `${items.length} item dengan subtotal ${formatCurrency(subtotal)}.`,
+        validation: "Area, preferensi budget, keramik, perekat/nat/spacer, pembulatan dus, dan subtotal sudah dicek.",
+      }),
+      subtotal,
+    },
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { messages?: RequestMessage[] };
@@ -525,7 +688,7 @@ export async function POST(request: Request) {
     let intake: Intake;
     try {
       intake = await analyzeIntake(messages);
-    } catch (error) {
+    } catch {
       if (hasImage(messages)) {
         const imageSummary = await describeImage(messages).catch(
           () => "Foto sudah diterima, tetapi detail kerusakan belum cukup jelas.",
@@ -538,7 +701,7 @@ export async function POST(request: Request) {
         });
       }
 
-      throw error;
+      intake = fallbackAnalyzeIntake(messages);
     }
     if (hasNoPreference(messages) && !intake.budgetPreference) {
       intake.budgetPreference = "standard";
@@ -574,6 +737,15 @@ export async function POST(request: Request) {
       return Response.json({
         type: "recommendation",
         ...(await buildWaterproofingRecommendation(intake)),
+        intake,
+        aiProvider: "sumopod",
+      });
+    }
+
+    if (intake.intent === "tiles") {
+      return Response.json({
+        type: "recommendation",
+        ...(await buildTilesRecommendation(intake)),
         intake,
         aiProvider: "sumopod",
       });
