@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Image as ImageIcon,
+  ListChecks,
   Loader2,
   PackageCheck,
   Save,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import { FormEvent, useMemo, useRef, useState } from "react";
 import {
+  AgentTraceStep,
   buildRecommendation,
   formatCurrency,
   Recommendation,
@@ -50,6 +52,42 @@ function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function AgentWorkflowTrace({ trace }: { trace: AgentTraceStep[] }) {
+  return (
+    <section className="rounded-lg border border-[#d9ded2] bg-white p-4">
+      <div className="flex items-center gap-2">
+        <ListChecks className="text-[#174832]" size={18} />
+        <div>
+          <p className="text-xs font-semibold uppercase text-[#52645c]">
+            Multi-agent audit
+          </p>
+          <h2 className="font-bold">Agent Workflow Trace</h2>
+        </div>
+      </div>
+      <ol className="mt-4 space-y-3">
+        {trace.map((entry, index) => (
+          <li key={entry.step} className="grid grid-cols-[28px_1fr] gap-3">
+            <span className="flex size-7 items-center justify-center rounded-md bg-[#edf5ee] text-xs font-bold text-[#174832]">
+              {index + 1}
+            </span>
+            <div>
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <p className="text-sm font-bold">{entry.step}</p>
+                <p className="text-xs font-semibold uppercase text-[#68776b]">
+                  {entry.agent}
+                </p>
+              </div>
+              <p className="mt-1 text-sm leading-5 text-[#52645c]">
+                {entry.summary}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 export function ChatDemo() {
   const [messages, setMessages] = useState(initialMessages);
   const [input, setInput] = useState(samplePrompts[0]);
@@ -68,9 +106,13 @@ export function ChatDemo() {
 
   const toolSteps = useMemo(
     () => [
-      { icon: Search, label: "Klasifikasi masalah + product RAG" },
-      { icon: Calculator, label: "Kalkulasi kebutuhan material" },
-      { icon: PackageCheck, label: "Susun quotation belanja" },
+      { icon: Search, label: "Problem Intake" },
+      { icon: Search, label: "Diagnosis" },
+      { icon: PackageCheck, label: "Catalog Retrieval" },
+      { icon: Calculator, label: "Material Calculator" },
+      { icon: ClipboardList, label: "Quotation" },
+      { icon: CheckCircle2, label: "Validation/Critic" },
+      { icon: ListChecks, label: "Trace Logger" },
     ],
     [],
   );
@@ -409,6 +451,10 @@ export function ChatDemo() {
                 </p>
               )}
             </section>
+
+            {recommendation?.agentTrace ? (
+              <AgentWorkflowTrace trace={recommendation.agentTrace} />
+            ) : null}
           </aside>
         </div>
       </div>

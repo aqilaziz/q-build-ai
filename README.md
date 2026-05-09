@@ -48,6 +48,20 @@ Core principles:
 - Public catalog rows are readable, user quotations are protected by RLS.
 - Demo must work well on mobile.
 
+## Multi-Agent Workflow Trace
+
+The demo exposes a professional audit trail called **Agent Workflow Trace** in the chat workspace and in saved quotation detail/PDF output. `Recommendation` and `SavedQuote` can carry an optional `agentTrace`, so API-backed quotes and local fallback quotes can use the same UI without breaking older records.
+
+| Trace step | Demo agent | Responsibility |
+| --- | --- | --- |
+| Problem Intake | Intake Agent | Normalizes the customer problem, area, and optional photo context. |
+| Diagnosis | Repair Diagnosis Agent | Classifies the repair case, such as roof leak/waterproofing or repainting. |
+| Catalog Retrieval | Product RAG Agent | Selects grounded QHomemart-style catalog products for the problem. |
+| Material Calculator | Quantity Tool Agent | Computes deterministic material needs and package round-up. |
+| Quotation | Quotation Agent | Builds the shopping list, line totals, subtotal, and customer-facing rationale. |
+| Validation/Critic | Critic Agent | Checks product completeness, quantity math, and subtotal consistency. |
+| Trace Logger | Audit Agent | Stores the trace with the quotation for review and PDF export. |
+
 ## Tech Stack
 
 - Next.js App Router
@@ -202,9 +216,11 @@ Target duration: under 2 minutes.
 5. Show catalog-grounded products: waterproofing, membrane/fiber reinforcement, and roller/brush.
 6. Show calculator output for 15 m2 waterproofing: 2 coats x 1 kg/m2/coat = 30 kg.
 7. Show subtotal based on product prices, not guessed text.
-8. Save the recommendation as a quotation.
-9. Open quote history and reopen the saved quotation.
-10. Explain business value: faster customer decision, larger relevant basket, and less repetitive staff triage.
+8. Point to the **Agent Workflow Trace** panel and explain the 7-step multi-agent handoff.
+9. Save the recommendation as a quotation.
+10. Open quote history and reopen the saved quotation.
+11. Export PDF or print preview and show the Agent Workflow Trace summary in the quotation document.
+12. Explain business value: faster customer decision, larger relevant basket, auditable recommendations, and less repetitive staff triage.
 
 ## Manual QA
 

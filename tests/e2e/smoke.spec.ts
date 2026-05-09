@@ -11,6 +11,7 @@ test.describe("smoke pages", () => {
     await expect(page.getByRole("link", { name: "Demo login" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Kirim" })).toBeVisible();
     await expect(page.getByText("Atap bocor 15 m2")).toBeVisible();
+    await expect(page.getByText("Agent Workflow Trace")).toBeVisible();
   });
 
   test("quotes shows saved quotations", async ({ page }) => {
@@ -69,5 +70,6 @@ test.describe("smoke pages", () => {
     await expect(page.getByRole("button", { name: "Export PDF" })).toBeVisible();
     await expect(page.getByText("Estimasi subtotal")).toBeVisible();
     await expect(page.getByText("Produk dan quantity")).toBeVisible();
+    await expect(page.getByText("Agent Workflow Trace")).toBeVisible();
   });
 });

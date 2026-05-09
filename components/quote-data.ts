@@ -16,6 +16,12 @@ export type QuoteBreakdown = {
   value: string;
 };
 
+export type AgentTraceStep = {
+  step: string;
+  agent: string;
+  summary: string;
+};
+
 export type SavedQuote = {
   id: string;
   title: string;
@@ -23,6 +29,7 @@ export type SavedQuote = {
   diagnosis: string;
   items: QuoteItem[];
   breakdown: QuoteBreakdown[];
+  agentTrace?: AgentTraceStep[];
   subtotal: number;
   createdAt: string;
   source: "api" | "local";
@@ -31,6 +38,15 @@ export type SavedQuote = {
 export type Recommendation = Omit<SavedQuote, "id" | "createdAt" | "source">;
 
 const STORAGE_KEY = "qbuild-ai.saved-quotes";
+const agentTraceStepLabels = [
+  "Problem Intake",
+  "Diagnosis",
+  "Catalog Retrieval",
+  "Material Calculator",
+  "Quotation",
+  "Validation/Critic",
+  "Trace Logger",
+];
 
 const defaultQuotes: SavedQuote[] = [
   {
@@ -79,6 +95,14 @@ const defaultQuotes: SavedQuote[] = [
       { label: "Pembulatan", value: "30 kg -> 2 pail @20 kg" },
       { label: "Subtotal", value: "Rp900.000" },
     ],
+    agentTrace: buildAgentTrace({
+      problem: "Atap bocor setelah hujan pada area 15 m2.",
+      diagnosis: "Rembesan dak/atap perlu waterproofing dua lapis.",
+      retrieval: "Waterproofing, membran fiber, dan roller aplikasi.",
+      calculator: "15 m2 x 2 lapis x 1 kg/m2 = 30 kg.",
+      quotation: "3 item rekomendasi dengan subtotal Rp900.000.",
+      validation: "Quantity dibulatkan ke kemasan 20 kg dan item pendukung wajib disertakan.",
+    }),
     subtotal: 900000,
     createdAt: new Date().toISOString(),
     source: "local",
@@ -108,6 +132,81 @@ function isSavedQuote(value: unknown): value is SavedQuote {
   );
 }
 
+function normalizeAgentTrace(value: unknown): AgentTraceStep[] | undefined {
+  const source =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as { steps?: unknown }).steps
+      : value;
+
+  if (!Array.isArray(source)) return undefined;
+
+  const trace = source
+    .map((entry, index) => {
+      if (!entry || typeof entry !== "object") return null;
+      const step = entry as Record<string, unknown>;
+      const stepName =
+        typeof step.step === "string"
+          ? step.step
+          : agentTraceStepLabels[index] ?? `Step ${index + 1}`;
+      const agent =
+        typeof step.agent === "string"
+          ? step.agent
+          : typeof step.agentName === "string"
+            ? step.agentName
+            : "Agent";
+      const summary =
+        typeof step.summary === "string"
+          ? step.summary
+          : typeof step.output === "string"
+            ? step.output
+            : typeof step.decision === "string"
+              ? step.decision
+              : typeof step.input === "string"
+                ? step.input
+                : "";
+
+      if (!summary) return null;
+
+      return {
+        step: stepName,
+        agent,
+        summary,
+      };
+    })
+    .filter((entry): entry is AgentTraceStep => entry !== null);
+
+  return trace.length > 0 ? trace : undefined;
+}
+
+function withNormalizedAgentTrace<T extends Recommendation | SavedQuote>(
+  quote: T,
+): T {
+  return {
+    ...quote,
+    agentTrace: normalizeAgentTrace(quote.agentTrace),
+  };
+}
+
+function toApiAgentTrace(trace: AgentTraceStep[] | undefined) {
+  if (!trace) return null;
+
+  return {
+    inputSummary: trace[0]?.summary ?? null,
+    finalSummary: trace.at(-1)?.summary ?? null,
+    status: "completed",
+    steps: trace.map((entry) => ({
+      agentName: entry.agent,
+      role: entry.step,
+      input: entry.step,
+      output: entry.summary,
+      decision: entry.step,
+      confidence: null,
+      metadata: { step: entry.step },
+    })),
+    metadata: { source: "q-build-ai-demo" },
+  };
+}
+
 export function readLocalQuotes(): SavedQuote[] {
   if (typeof window === "undefined") return defaultQuotes;
 
@@ -118,7 +217,7 @@ export function readLocalQuotes(): SavedQuote[] {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return defaultQuotes;
     const quotes = parsed.filter(isSavedQuote);
-    return quotes.length > 0 ? quotes : defaultQuotes;
+    return quotes.length > 0 ? quotes.map(withNormalizedAgentTrace) : defaultQuotes;
   } catch {
     return defaultQuotes;
   }
@@ -126,7 +225,7 @@ export function readLocalQuotes(): SavedQuote[] {
 
 export function writeLocalQuote(recommendation: Recommendation): SavedQuote {
   const quote: SavedQuote = {
-    ...recommendation,
+    ...withNormalizedAgentTrace(recommendation),
     id:
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
@@ -149,7 +248,7 @@ export async function loadQuotes(): Promise<SavedQuote[]> {
       const quotes = Array.isArray(payload) ? payload : payload.quotes;
       if (Array.isArray(quotes)) {
         return quotes.filter(isSavedQuote).map((quote) => ({
-          ...quote,
+          ...withNormalizedAgentTrace(quote),
           source: "api" as const,
         }));
       }
@@ -166,7 +265,9 @@ export async function loadQuote(id: string): Promise<SavedQuote | null> {
     const response = await fetch(`/api/quotes/${id}`, { cache: "no-store" });
     if (response.ok) {
       const quote = await response.json();
-      if (isSavedQuote(quote)) return { ...quote, source: "api" };
+      if (isSavedQuote(quote)) {
+        return { ...withNormalizedAgentTrace(quote), source: "api" };
+      }
     }
   } catch {
     // Client fallback keeps the detail route usable for competition demo.
@@ -182,18 +283,78 @@ export async function saveQuote(
     const response = await fetch("/api/quotes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(recommendation),
+      body: JSON.stringify({
+        ...recommendation,
+        agentTrace: toApiAgentTrace(recommendation.agentTrace),
+      }),
     });
 
     if (response.ok) {
       const quote = await response.json();
-      if (isSavedQuote(quote)) return { ...quote, source: "api" };
+      if (isSavedQuote(quote)) {
+        return { ...withNormalizedAgentTrace(quote), source: "api" };
+      }
     }
   } catch {
     // Fall through to local persistence.
   }
 
   return writeLocalQuote(recommendation);
+}
+
+function buildAgentTrace({
+  problem,
+  diagnosis,
+  retrieval,
+  calculator,
+  quotation,
+  validation,
+}: {
+  problem: string;
+  diagnosis: string;
+  retrieval: string;
+  calculator: string;
+  quotation: string;
+  validation: string;
+}): AgentTraceStep[] {
+  return [
+    {
+      step: "Problem Intake",
+      agent: "Intake Agent",
+      summary: problem,
+    },
+    {
+      step: "Diagnosis",
+      agent: "Repair Diagnosis Agent",
+      summary: diagnosis,
+    },
+    {
+      step: "Catalog Retrieval",
+      agent: "Product RAG Agent",
+      summary: retrieval,
+    },
+    {
+      step: "Material Calculator",
+      agent: "Quantity Tool Agent",
+      summary: calculator,
+    },
+    {
+      step: "Quotation",
+      agent: "Quotation Agent",
+      summary: quotation,
+    },
+    {
+      step: "Validation/Critic",
+      agent: "Critic Agent",
+      summary: validation,
+    },
+    {
+      step: "Trace Logger",
+      agent: "Audit Agent",
+      summary:
+        "Trace disimpan bersama quotation agar demo dapat diaudit dari chat sampai PDF.",
+    },
+  ];
 }
 
 export function buildRecommendation(prompt: string): Recommendation {
@@ -261,6 +422,17 @@ export function buildRecommendation(prompt: string): Recommendation {
         { label: "Pembulatan", value: `${requiredKg} kg -> ${paintPails} pail @5 kg` },
         { label: "Subtotal", value: formatCurrency(subtotal) },
       ],
+      agentTrace: buildAgentTrace({
+        problem: `Pelanggan meminta rekomendasi cat ulang untuk area sekitar ${area} m2.`,
+        diagnosis:
+          "Kasus diklasifikasikan sebagai repainting interior dengan kebutuhan primer dan dua lapis cat.",
+        retrieval:
+          "Katalog demo memilih cat interior 5 kg, alkali primer, dan set roller.",
+        calculator: `${area} m2 x ${coats} lapis / ${coverageM2PerKg} m2 per kg = ${requiredKg} kg, dibulatkan menjadi ${paintPails} pail.`,
+        quotation: `${items.length} item quotation disusun dengan subtotal ${formatCurrency(subtotal)}.`,
+        validation:
+          "Cat utama, primer, alat aplikasi, pembulatan kemasan, dan subtotal sudah dicek.",
+      }),
       subtotal,
     };
   }
@@ -318,6 +490,17 @@ export function buildRecommendation(prompt: string): Recommendation {
       { label: "Pembulatan", value: `${requiredKg} kg -> ${pails} pail @20 kg` },
       { label: "Subtotal", value: formatCurrency(subtotal) },
     ],
+    agentTrace: buildAgentTrace({
+      problem: `Pelanggan melaporkan atap/dak bocor dengan area sekitar ${area} m2.`,
+      diagnosis:
+        "Kasus diklasifikasikan sebagai waterproofing dak/atap dengan retakan atau sambungan berisiko.",
+      retrieval:
+        "Katalog demo memilih pelapis anti bocor, membran fiber retakan, dan roller aplikasi.",
+      calculator: `${area} m2 x ${coats} lapis x ${coverageKgPerM2} kg/m2 = ${requiredKg} kg, dibulatkan menjadi ${pails} pail.`,
+      quotation: `${items.length} item quotation disusun dengan subtotal ${formatCurrency(subtotal)}.`,
+      validation:
+        "Produk utama, pendukung retakan, alat aplikasi, pembulatan kemasan, dan subtotal sudah dicek.",
+    }),
     subtotal,
   };
 }

@@ -21,6 +21,32 @@ export type QuotationItemInput = {
   reason?: string | null;
 };
 
+export type AgentTraceStep = {
+  agentName: string;
+  role: string;
+  input?: string | null;
+  output?: string | null;
+  decision?: string | null;
+  confidence?: number | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+export type AgentTraceInput = {
+  inputSummary?: string | null;
+  finalSummary?: string | null;
+  status?: string | null;
+  steps: AgentTraceStep[];
+  metadata?: Record<string, unknown> | null;
+};
+
+export type SavedAgentTrace = {
+  runId: string;
+  inputSummary: string | null;
+  finalSummary: string | null;
+  status: string | null;
+  steps: AgentTraceStep[];
+};
+
 export type SaveQuotationInput = {
   title: string;
   summary: string;
@@ -31,6 +57,7 @@ export type SaveQuotationInput = {
   installmentMonths?: number | null;
   installmentAmount?: number | null;
   items: QuotationItemInput[];
+  agentTrace?: AgentTraceInput | null;
 };
 
 export type SavedQuotation = {

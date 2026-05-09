@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { saveQuotationWithClient } from "@/lib/ai/quotations";
 import { createUserContextSupabaseClient } from "@/lib/supabase/server";
-import type { SaveQuotationInput } from "@/types/domain";
+import type { AgentTraceInput, SaveQuotationInput } from "@/types/domain";
 
 type UiQuoteItemInput = {
   productId?: string | null;
@@ -10,6 +10,12 @@ type UiQuoteItemInput = {
   unitPrice: number;
   quantity: number;
   reason?: string | null;
+};
+
+type UiAgentTraceStep = {
+  step?: string | null;
+  agent?: string | null;
+  summary?: string | null;
 };
 
 type UiQuoteInput = {
@@ -24,6 +30,7 @@ type UiQuoteInput = {
   installmentMonths?: number | null;
   installmentAmount?: number | null;
   items?: UiQuoteItemInput[];
+  agentTrace?: AgentTraceInput | UiAgentTraceStep[] | null;
 };
 
 type DbQuotation = {
@@ -44,6 +51,29 @@ type DbQuotation = {
     line_total: number | string;
     reason: string | null;
   }>;
+  agent_runs?: DbAgentRun[];
+};
+
+type DbAgentRun = {
+  id: string;
+  input_summary: string | null;
+  final_summary: string | null;
+  status: string | null;
+  created_at?: string | null;
+  agent_steps?: DbAgentStep[];
+};
+
+type DbAgentStep = {
+  id: string;
+  step_order?: number | string | null;
+  agent_name: string | null;
+  role: string | null;
+  input: string | null;
+  output: string | null;
+  decision: string | null;
+  confidence: number | string | null;
+  metadata: Record<string, unknown> | null;
+  created_at?: string | null;
 };
 
 function formatCurrency(value: number) {
@@ -52,6 +82,33 @@ function formatCurrency(value: number) {
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function toAgentTrace(quotation: DbQuotation) {
+  const run = [...(quotation.agent_runs ?? [])].sort((a, b) =>
+    String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")),
+  )[0];
+
+  if (!run) {
+    return null;
+  }
+
+  const steps = [...(run.agent_steps ?? [])].sort((a, b) => {
+    const orderA = Number(a.step_order ?? 0);
+    const orderB = Number(b.step_order ?? 0);
+
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+
+    return String(a.created_at ?? "").localeCompare(String(b.created_at ?? ""));
+  });
+
+  return steps.map((step) => ({
+    step: step.role ?? step.decision ?? "Agent Step",
+    agent: step.agent_name ?? "Agent",
+    summary: step.output ?? step.decision ?? "Langkah agent selesai.",
+  }));
 }
 
 function toSavedQuote(quotation: DbQuotation) {
@@ -77,7 +134,37 @@ function toSavedQuote(quotation: DbQuotation) {
     subtotal,
     createdAt: quotation.created_at,
     source: "api" as const,
+    agentTrace: toAgentTrace(quotation),
   };
+}
+
+function normalizeAgentTrace(body: UiQuoteInput): AgentTraceInput | null {
+  const trace = body.agentTrace;
+
+  if (!trace) return null;
+
+  if (Array.isArray(trace)) {
+    return {
+      inputSummary:
+        body.problemSummary ??
+        body.summary ??
+        body.diagnosis ??
+        "Permintaan rekomendasi material.",
+      finalSummary:
+        body.diagnosis ?? body.summary ?? "Quotation disusun oleh Q-Build AI.",
+      status: "completed",
+      steps: trace.map((entry) => ({
+        agentName: entry.agent ?? "Agent",
+        role: entry.step ?? "Agent Step",
+        input: body.problemSummary ?? body.summary ?? null,
+        output: entry.summary ?? "Langkah agent selesai.",
+        decision: entry.step ?? null,
+        metadata: { uiStep: entry.step ?? null },
+      })),
+    };
+  }
+
+  return trace;
 }
 
 function normalizeSaveInput(body: UiQuoteInput): SaveQuotationInput {
@@ -109,6 +196,7 @@ function normalizeSaveInput(body: UiQuoteInput): SaveQuotationInput {
       quantity: Number(item.quantity),
       reason: item.reason ?? null,
     })),
+    agentTrace: normalizeAgentTrace(body),
   };
 }
 
@@ -129,7 +217,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("quotations")
     .select(
-      "id,title,summary,subtotal,installment_months,installment_amount,created_at,quotation_items(id,product_id,name,unit,unit_price,quantity,line_total,reason)",
+      "id,title,summary,subtotal,installment_months,installment_amount,created_at,quotation_items(id,product_id,name,unit,unit_price,quantity,line_total,reason),agent_runs(id,input_summary,final_summary,status,created_at,agent_steps(id,step_order,agent_name,role,input,output,decision,confidence,metadata,created_at))",
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
