@@ -123,7 +123,12 @@ npm run build
 Create `.env.local` from `.env.example`.
 
 ```env
-OPENAI_API_KEY=
+AI_BASE_URL=
+AI_API_KEY=
+AI_MODEL=gemini/gemini-2.5-flash
+AI_FALLBACK_MODELS=gpt-4o-mini,gpt-4.1-mini
+AI_ATTEMPT_TIMEOUT_MS=6000
+AI_EMBEDDING_MODEL=text-embedding-3-small
 SUPABASE_PROJECT_REF=ksemrhvevevyjxgdsznw
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
@@ -132,7 +137,10 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 Variable usage:
 
-- `OPENAI_API_KEY`: server-side chat and embedding calls.
+- `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL`: OpenAI-compatible chat provider configuration. Current Sumopod model is `gemini/gemini-2.5-flash`.
+- `AI_FALLBACK_MODELS`: comma-separated chat model fallback list. The recommendation API tries the primary model first, then these fallback models before using local deterministic parsing.
+- `AI_ATTEMPT_TIMEOUT_MS`: timeout per chat model attempt before trying the next model or local parser.
+- `OPENAI_API_KEY`: optional fallback for standard OpenAI-compatible chat and embedding calls when `AI_API_KEY` is not set.
 - `AI_EMBEDDING_API_KEY` / `AI_EMBEDDING_MODEL` / `AI_EMBEDDING_BASE_URL`: optional override for product embedding generation and runtime semantic search. For Sumopod, set `AI_EMBEDDING_MODEL=text-embedding-3-small`; `AI_EMBEDDING_API_KEY` and `AI_EMBEDDING_BASE_URL` can be omitted so they inherit `AI_API_KEY` and `AI_BASE_URL`.
 - `SUPABASE_PROJECT_REF`: hosted Supabase project ref. Defaults to `ksemrhvevevyjxgdsznw` in scripts when URL is omitted.
 - `NEXT_PUBLIC_SUPABASE_URL`: browser-safe Supabase project URL.

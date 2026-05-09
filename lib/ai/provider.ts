@@ -18,7 +18,21 @@ export function getAIProvider() {
 
 export function getChatModel() {
   const provider = getAIProvider();
-  return provider.chat(optionalEnv("AI_MODEL") ?? optionalEnv("OPENAI_MODEL") ?? DEFAULT_CHAT_MODEL);
+  return provider.chat(getChatModelNames()[0]);
+}
+
+export function getChatModels() {
+  const provider = getAIProvider();
+  return getChatModelNames().map((model) => ({
+    name: model,
+    model: provider.chat(model),
+  }));
+}
+
+export function getChatModelNames() {
+  const primary = optionalEnv("AI_MODEL") ?? optionalEnv("OPENAI_MODEL") ?? DEFAULT_CHAT_MODEL;
+  const fallbacks = parseCsvEnv("AI_FALLBACK_MODELS");
+  return [...new Set([primary, ...fallbacks])];
 }
 
 export function getEmbeddingConfig() {
@@ -63,4 +77,11 @@ function hasCustomAIConfig() {
       optionalEnv("AI_API_KEY") ||
       optionalEnv("AI_MODEL"),
   );
+}
+
+function parseCsvEnv(name: string) {
+  return (optionalEnv(name) ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 }

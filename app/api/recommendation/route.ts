@@ -2,7 +2,7 @@ import { generateObject, generateText, type ModelMessage } from "ai";
 import { z } from "zod";
 import { calculatePaint, calculateSubtotal, calculateTiles, calculateWaterproofing } from "@/lib/calculators";
 import { searchProducts } from "@/lib/ai/products";
-import { getChatModel } from "@/lib/ai/provider";
+import { getChatModels } from "@/lib/ai/provider";
 import type { ProductSearchResult } from "@/types/domain";
 
 const intakeSchema = z.object({
@@ -52,6 +52,8 @@ const fallbackQuestions: Record<string, string> = {
 
 const supportedCategoryText =
   "waterproofing/atap bocor, cat tembok, plumbing/pipa, keramik, perbaikan dinding, dan tools pendukung renovasi";
+
+const DEFAULT_AI_ATTEMPT_TIMEOUT_MS = 6000;
 
 const unsupportedKeywords = [
   "kipas",
@@ -110,6 +112,11 @@ function toTranscript(messages: RequestMessage[]) {
 
 function normalizeText(value: string) {
   return value.toLowerCase();
+}
+
+function aiAttemptTimeoutMs() {
+  const value = Number(process.env.AI_ATTEMPT_TIMEOUT_MS);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_AI_ATTEMPT_TIMEOUT_MS;
 }
 
 function userText(messages: RequestMessage[]) {
@@ -222,15 +229,20 @@ function nextQuestion(intake: Intake, missingFields: string[]) {
 
 async function analyzeIntake(messages: RequestMessage[]) {
   const transcript = toTranscript(messages);
-  const { object } = await generateObject({
-    model: getChatModel(),
-    schema: intakeSchema,
-    schemaName: "QBuildIntake",
-    schemaDescription:
-      "Hasil intake kebutuhan pelanggan toko bahan bangunan sebelum membuat rekomendasi produk.",
-    temperature: 0.1,
-    maxOutputTokens: 700,
-    system: `Anda adalah intake agent toko bahan bangunan.
+  let lastError: unknown;
+
+  for (const { model } of getChatModels()) {
+    try {
+      const { object } = await generateObject({
+        model,
+        schema: intakeSchema,
+        schemaName: "QBuildIntake",
+        schemaDescription:
+          "Hasil intake kebutuhan pelanggan toko bahan bangunan sebelum membuat rekomendasi produk.",
+        temperature: 0.1,
+        maxOutputTokens: 700,
+        abortSignal: AbortSignal.timeout(aiAttemptTimeoutMs()),
+        system: `Anda adalah intake agent toko bahan bangunan.
 Ekstrak kebutuhan pelanggan dari riwayat chat dan foto bila ada.
 Jangan membuat quotation bila data penting belum cukup.
 
@@ -243,16 +255,22 @@ Aturan intent:
 - Untuk waterproofing dan cat, tanya preferensi ekonomis/standar/premium atau batas budget sebelum rekomendasi produk.
 - Jika pelanggan menjawab "tidak ada", "bebas", "terserah", atau "standar saja" untuk budget/kualitas, set budgetPreference = "standard".
 - nextQuestion harus satu pertanyaan pendek dan natural dalam Bahasa Indonesia bila ada data penting yang kurang.`,
-    messages: [
-      {
-        role: "user",
-        content: `Riwayat chat:\n${transcript}`,
-      },
-      ...toModelMessages(messages, transcript),
-    ],
-  });
+        messages: [
+          {
+            role: "user",
+            content: `Riwayat chat:\n${transcript}`,
+          },
+          ...toModelMessages(messages, transcript),
+        ],
+      });
 
-  return object;
+      return object;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("AI intake gagal.");
 }
 
 function fallbackAnalyzeIntake(messages: RequestMessage[]): Intake {
@@ -304,16 +322,27 @@ function fallbackAnalyzeIntake(messages: RequestMessage[]): Intake {
 
 async function describeImage(messages: RequestMessage[]) {
   const transcript = toTranscript(messages);
-  const { text } = await generateText({
-    model: getChatModel(),
-    temperature: 0.2,
-    maxOutputTokens: 220,
-    system:
-      "Anda membantu membaca foto masalah rumah. Jawab singkat dalam Bahasa Indonesia. Jika foto tidak jelas, katakan tidak jelas.",
-    messages: toModelMessages(messages, transcript),
-  });
+  let lastError: unknown;
 
-  return text.trim();
+  for (const { model } of getChatModels()) {
+    try {
+      const { text } = await generateText({
+        model,
+        temperature: 0.2,
+        maxOutputTokens: 220,
+        abortSignal: AbortSignal.timeout(aiAttemptTimeoutMs()),
+        system:
+          "Anda membantu membaca foto masalah rumah. Jawab singkat dalam Bahasa Indonesia. Jika foto tidak jelas, katakan tidak jelas.",
+        messages: toModelMessages(messages, transcript),
+      });
+
+      return text.trim();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("AI image analysis gagal.");
 }
 
 function chooseByBudget(products: ProductSearchResult[], budgetPreference: Intake["budgetPreference"]) {
