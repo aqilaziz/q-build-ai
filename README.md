@@ -4,7 +4,7 @@ Q-Build AI is a mobile-first renovation shopping agent for the QHomemart AI Agen
 
 ## Live Demo
 
-Production URL: https://qbuilt-ai.vercel.app
+Production URL: https://qbuilt-hcak3yfxb-aqilazizs-projects.vercel.app
 
 Local URL:
 
