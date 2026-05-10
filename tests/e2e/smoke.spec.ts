@@ -218,12 +218,57 @@ test.describe("smoke pages", () => {
         }),
       );
     });
+    let bulkDeleteCalled = false;
     await page.route("**/api/admin/catalog", async (route) => {
+      if (route.request().method() === "POST") {
+        const body = route.request().postData() ?? "";
+        bulkDeleteCalled = body.includes("deleteProducts");
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: true }),
+        });
+        return;
+      }
+
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          products: [],
+          products: [
+            {
+              id: "prod-1",
+              name: "Nippon Vinilex Interior Paint 2.5L",
+              category: "paint",
+              brand: "Nippon",
+              description: "Cat tembok interior.",
+              use_cases: ["cat interior"],
+              unit: "pail",
+              price: 185000,
+              stock_status: "in_stock",
+              coverage_note: null,
+              image_path: null,
+              image_alt: null,
+              image_url: null,
+              label_ids: ["label-premium"],
+            },
+            {
+              id: "prod-2",
+              name: "QHM Paint Roller Set 9 inch",
+              category: "paint",
+              brand: "QHM",
+              description: "Set roller cat.",
+              use_cases: ["alat cat"],
+              unit: "set",
+              price: 69000,
+              stock_status: "in_stock",
+              coverage_note: null,
+              image_path: null,
+              image_alt: null,
+              image_url: null,
+              label_ids: [],
+            },
+          ],
           categories: [
             {
               id: "cat-paint",
@@ -252,6 +297,14 @@ test.describe("smoke pages", () => {
     await expect(priceInput).toBeVisible();
     await priceInput.fill("2500000");
     await expect(priceInput).toHaveValue("2.500.000");
+    await page.getByLabel("Pilih semua produk yang tampil").check();
+    await expect(page.getByText("2 dipilih")).toBeVisible();
+    page.once("dialog", (dialog) => {
+      expect(dialog.message()).toContain("2 produk");
+      void dialog.accept();
+    });
+    await page.getByRole("button", { name: "Hapus item terpilih" }).click();
+    expect(bulkDeleteCalled).toBe(true);
 
     await page.getByRole("button", { name: /^Kategori \d+/ }).click();
     await expect(page.getByRole("heading", { name: "Kelola kategori produk" })).toBeVisible();

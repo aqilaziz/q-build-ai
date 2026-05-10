@@ -322,6 +322,28 @@ async function deleteProduct(form: FormData) {
   }
 }
 
+async function deleteProducts(form: FormData) {
+  const supabase = createServiceSupabaseClient();
+  const ids = [...new Set(listValue(text(form, "ids")))];
+  if (ids.length === 0) throw new Error("Pilih minimal satu produk.");
+
+  const { data, error: selectError } = await supabase
+    .from("products")
+    .select("image_path")
+    .in("id", ids);
+  if (selectError) throw new Error(selectError.message);
+
+  const { error } = await supabase.from("products").delete().in("id", ids);
+  if (error) throw new Error(error.message);
+
+  const imagePaths = (data ?? [])
+    .map((product) => product.image_path)
+    .filter((path): path is string => Boolean(path));
+  if (imagePaths.length > 0) {
+    await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(imagePaths);
+  }
+}
+
 export async function GET(request: Request) {
   try {
     await requireAdmin(request);
@@ -343,6 +365,7 @@ export async function POST(request: Request) {
     else if (action === "deleteLabel") await deleteLabel(form);
     else if (action === "upsertProduct") await upsertProduct(form);
     else if (action === "deleteProduct") await deleteProduct(form);
+    else if (action === "deleteProducts") await deleteProducts(form);
     else throw new Error("Action admin tidak dikenal.");
 
     return Response.json({ ok: true });

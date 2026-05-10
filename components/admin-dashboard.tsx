@@ -169,6 +169,7 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [productForm, setProductForm] = useState<ProductForm>(emptyProductForm);
   const [categoryForm, setCategoryForm] = useState({
     id: "",
@@ -200,7 +201,10 @@ export function AdminDashboard() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       if (nextSession) void loadCatalog(nextSession.access_token);
-      else setData(null);
+      else {
+        setData(null);
+        setSelectedProductIds([]);
+      }
     });
 
     return () => {
@@ -228,6 +232,16 @@ export function AdminDashboard() {
     );
   }, [data, query]);
 
+  const filteredProductIds = useMemo(
+    () => filteredProducts.map((product) => product.id),
+    [filteredProducts],
+  );
+  const visibleSelectedCount = filteredProductIds.filter((id) =>
+    selectedProductIds.includes(id),
+  ).length;
+  const allVisibleProductsSelected =
+    filteredProductIds.length > 0 && visibleSelectedCount === filteredProductIds.length;
+
   async function loadCatalog(accessToken = token) {
     if (!accessToken) return;
     setError("");
@@ -241,6 +255,10 @@ export function AdminDashboard() {
       return;
     }
     setData(payload);
+    const currentIds = new Set(
+      (payload.products as Product[] | undefined)?.map((product) => product.id) ?? [],
+    );
+    setSelectedProductIds((ids) => ids.filter((id) => currentIds.has(id)));
     setLoading(false);
     if (!productForm.category && payload.categories?.[0]) {
       setProductForm((current) => ({
@@ -286,6 +304,7 @@ export function AdminDashboard() {
     await supabase.auth.signOut();
     setSession(null);
     setData(null);
+    setSelectedProductIds([]);
   }
 
   async function saveProduct(event: FormEvent<HTMLFormElement>) {
@@ -306,6 +325,31 @@ export function AdminDashboard() {
     formData.set("action", "deleteProduct");
     formData.set("id", product.id);
     await submitForm(formData, "Produk dihapus.");
+  }
+
+  function toggleProductSelection(productId: string, checked: boolean) {
+    setSelectedProductIds((current) =>
+      checked
+        ? [...new Set([...current, productId])]
+        : current.filter((id) => id !== productId),
+    );
+  }
+
+  function toggleVisibleProducts(checked: boolean) {
+    setSelectedProductIds((current) => {
+      if (checked) return [...new Set([...current, ...filteredProductIds])];
+      return current.filter((id) => !filteredProductIds.includes(id));
+    });
+  }
+
+  async function deleteSelectedProducts() {
+    if (selectedProductIds.length === 0) return;
+    if (!confirm(`Hapus ${selectedProductIds.length} produk terpilih?`)) return;
+    const formData = new FormData();
+    formData.set("action", "deleteProducts");
+    formData.set("ids", selectedProductIds.join(","));
+    await submitForm(formData, `${selectedProductIds.length} produk dihapus.`);
+    setSelectedProductIds([]);
   }
 
   async function saveCategory(event: FormEvent<HTMLFormElement>) {
@@ -536,6 +580,7 @@ export function AdminDashboard() {
                 />
               </label>
               <button
+                type="button"
                 onClick={() =>
                   setProductForm({
                     ...emptyProductForm,
@@ -548,9 +593,37 @@ export function AdminDashboard() {
                 Produk baru
               </button>
             </div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d9ded2] bg-white px-3 py-2 text-sm">
+              <label className="inline-flex items-center gap-2 font-semibold text-[#26342b]">
+                <input
+                  type="checkbox"
+                  checked={allVisibleProductsSelected}
+                  disabled={filteredProductIds.length === 0}
+                  onChange={(event) => toggleVisibleProducts(event.target.checked)}
+                  className="size-4 accent-[#174832]"
+                  aria-label="Pilih semua produk yang tampil"
+                />
+                Pilih semua item yang tampil
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-[#52645c]">
+                  {selectedProductIds.length} dipilih
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void deleteSelectedProducts()}
+                  disabled={selectedProductIds.length === 0 || saving}
+                  className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#efb8a8] bg-[#fff4ef] px-3 text-sm font-bold text-[#8a321d] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Trash2 size={15} />
+                  Hapus item terpilih
+                </button>
+              </div>
+            </div>
 
             <div className="mt-3 overflow-hidden rounded-lg border border-[#d9ded2] bg-white">
-              <div className="grid grid-cols-[86px_1fr_120px_110px] gap-3 border-b border-[#d9ded2] bg-[#edf5ee] px-3 py-2 text-xs font-bold uppercase text-[#52645c] max-md:hidden">
+              <div className="grid grid-cols-[36px_86px_1fr_120px_110px] gap-3 border-b border-[#d9ded2] bg-[#edf5ee] px-3 py-2 text-xs font-bold uppercase text-[#52645c] max-md:hidden">
+                <span>Pilih</span>
                 <span>Gambar</span>
                 <span>Produk</span>
                 <span>Harga</span>
@@ -560,8 +633,18 @@ export function AdminDashboard() {
                 {filteredProducts.map((product) => (
                   <article
                     key={product.id}
-                    className="grid gap-3 px-3 py-3 md:grid-cols-[86px_1fr_120px_110px]"
+                    className="grid gap-3 px-3 py-3 md:grid-cols-[36px_86px_1fr_120px_110px]"
                   >
+                    <label className="flex items-start pt-2 md:justify-center" aria-label={`Pilih ${product.name}`}>
+                      <input
+                        type="checkbox"
+                        checked={selectedProductIds.includes(product.id)}
+                        onChange={(event) =>
+                          toggleProductSelection(product.id, event.target.checked)
+                        }
+                        className="size-4 accent-[#174832]"
+                      />
+                    </label>
                     <div className="flex aspect-square w-20 items-center justify-center overflow-hidden rounded-md bg-[#edf5ee]">
                       {product.image_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
