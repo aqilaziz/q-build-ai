@@ -7,6 +7,7 @@ import {
   Camera,
   CheckCircle2,
   ClipboardList,
+  LayoutDashboard,
   Image as ImageIcon,
   ListChecks,
   Loader2,
@@ -358,10 +359,12 @@ export function ChatDemo() {
                 <ClipboardList size={19} />
               </Link>
               <Link
-                href="/login"
-                className="hidden rounded-md bg-[#174832] px-3 py-2 text-sm font-semibold text-white sm:inline-flex"
+                href="/admin"
+                className="inline-flex size-10 items-center justify-center rounded-md border border-[#cbd3c4] bg-white text-[#26342b] sm:size-auto sm:gap-2 sm:bg-[#174832] sm:px-3 sm:py-2 sm:text-sm sm:font-semibold sm:text-white"
+                aria-label="Dashboard admin"
               >
-                Demo login
+                <LayoutDashboard size={17} />
+                <span className="hidden sm:inline">Admin</span>
               </Link>
             </div>
           </div>

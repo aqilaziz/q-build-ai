@@ -9,7 +9,7 @@ test.describe("smoke pages", () => {
     ).toBeVisible();
     await expect(page.getByLabel("Pesan renovasi")).toBeVisible();
     await expect(page.getByRole("button", { name: "Session Baru" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Demo login" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Dashboard admin" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Katalog produk" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Kirim" })).toBeVisible();
     await expect(page.getByText("Belum ada hasil")).toBeVisible();
@@ -183,15 +183,15 @@ test.describe("smoke pages", () => {
     await expect(page.getByText(/Rp\s*125\.000/)).toBeVisible();
   });
 
-  test("login shows demo auth form", async ({ page }) => {
-    await page.goto("/login");
+  test("admin shows Supabase auth form", async ({ page }) => {
+    await page.goto("/admin");
 
     await expect(
-      page.getByRole("heading", { name: "Masuk Q-Build AI" }),
+      page.getByRole("heading", { name: "Masuk sebagai admin" }),
     ).toBeVisible();
-    await expect(page.getByLabel("Email")).toHaveValue("demo@qhomemart.local");
-    await expect(page.getByLabel("Password")).toHaveValue("password-demo");
-    await expect(page.getByRole("link", { name: "Lanjut mode demo" })).toBeVisible();
+    await expect(page.getByLabel("Email")).toHaveValue("admin@gmail.com");
+    await expect(page.getByLabel("Password")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Masuk" })).toBeVisible();
   });
 
   test("quote detail can export a professional PDF layout", async ({ page }) => {
