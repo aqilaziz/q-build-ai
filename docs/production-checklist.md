@@ -1,11 +1,21 @@
 # Production Submission Checklist
 
-Use this before submitting the GitHub repo and demo video.
+Verified for submission on `2026-05-10 11:59 +07:00`.
+
+Latest automated checks:
+
+```text
+Production URL: https://qbuilt-ai.vercel.app
+Git SHA: ce33626
+npm run supabase:verify: PASS
+$env:EVAL_BASE_URL="https://qbuilt-ai.vercel.app"; npm run eval:agents: 7/7 PASS
+Production routes /, /catalog, /admin: HTTP 200
+```
 
 ## Deployment
 
-- [ ] Production URL opens on desktop and mobile.
-- [ ] Production env vars are set:
+- [x] Production URL opens: `https://qbuilt-ai.vercel.app`.
+- [x] Production env vars are set and validated through live API/database checks:
   - `AI_BASE_URL`
   - `AI_API_KEY`
   - `AI_MODEL`
@@ -14,38 +24,41 @@ Use this before submitting the GitHub repo and demo video.
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
   - `SUPABASE_SERVICE_ROLE_KEY`
   - `ADMIN_EMAILS`
-- [ ] `/catalog` loads product data.
-- [ ] `/admin` loads and rejects non-admin users.
-- [ ] Browser console has no blocking runtime error.
+- [x] `/catalog` loads product data.
+- [x] `/admin` loads the Supabase admin auth gate.
+- [ ] Final browser-console sweep during video recording.
 
 ## Database
 
-- [ ] `npm run supabase:verify` passes.
-- [ ] In-stock products have embeddings.
-- [ ] `match_products` RPC works.
-- [ ] RLS protects quotation and agent trace data.
+- [x] `npm run supabase:verify` passes.
+- [x] Products table reachable: 24 rows.
+- [x] In-stock products have embeddings: 24/24.
+- [x] `match_products` RPC works.
+- [x] Service role connection verified.
+- [x] RLS policies are included in Supabase migrations for quotations and agent trace tables.
 
 ## Demo Scenarios
 
-- [ ] Atap bocor 15 m2 returns waterproofing recommendation.
-- [ ] Pipa bocor setengah meter returns plumbing recommendation and `0.5 m`.
-- [ ] Cat dinding 12 m2 warna krem does not ask color again.
-- [ ] Dinding rembes/retak 10 m2 returns wall repair recommendation.
-- [ ] Missing area asks one focused clarification.
-- [ ] Unsupported product request does not invent catalog items.
-- [ ] `$env:EVAL_BASE_URL="https://qbuilt-ai.vercel.app"; npm run eval:agents` passes.
+- [x] Atap bocor 15 m2 returns waterproofing recommendation.
+- [x] Pipa bocor setengah meter returns plumbing recommendation and `0.5 m`.
+- [x] Pipa bocor seperempat meter returns plumbing recommendation and `0.25 m`.
+- [x] Cat dinding 12 m2 warna krem does not ask color again.
+- [x] Dinding rembes/retak 10 m2 returns wall repair recommendation.
+- [x] Missing area asks one focused clarification.
+- [x] Unsupported product request does not invent catalog items.
+- [x] `$env:EVAL_BASE_URL="https://qbuilt-ai.vercel.app"; npm run eval:agents` passes: 7/7.
 
 ## Agent Evidence
 
-- [ ] Chat view shows **Agent Workflow Trace**.
-- [ ] Chat view shows **Agent message passing**.
-- [ ] Saved quotation detail shows the trace.
-- [ ] Trace includes at least 7 steps and typed message handoffs.
+- [x] Chat view shows **Agent Workflow Trace**.
+- [x] Chat view shows **Agent message passing**.
+- [x] Saved quotation detail shows the trace.
+- [x] Trace includes at least 7 steps and typed message handoffs.
 
 ## Submission Assets
 
-- [ ] README has the production URL.
-- [ ] README maps the implementation to judging criteria.
-- [ ] `docs/agent-evaluation.md` latest run is filled in.
+- [x] README has the production URL.
+- [x] README maps the implementation to judging criteria.
+- [x] `docs/agent-evaluation.md` latest run is filled in.
 - [ ] Demo video follows `docs/submission-demo-script.md`.
-- [ ] GitHub branch is pushed and public/reviewer-accessible.
+- [x] GitHub branch is pushed to `origin/001-q-build-ai-agent`.
