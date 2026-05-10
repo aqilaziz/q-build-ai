@@ -25,6 +25,17 @@ function AgentWorkflowTraceSummary({ trace }: { trace: AgentTraceStep[] }) {
     (total, entry) => total + (entry.durationMs ?? 0),
     0,
   );
+  const communicationLog = trace.flatMap((entry) => {
+    const log = entry.metadata?.communicationLog;
+    return Array.isArray(log)
+      ? log.filter((item): item is {
+          from: string;
+          to: string;
+          type: string;
+          summary: string;
+        } => Boolean(item) && typeof item === "object")
+      : [];
+  });
 
   return (
     <section className="rounded-lg border border-[#d9ded2] bg-white p-4">
@@ -50,6 +61,27 @@ function AgentWorkflowTraceSummary({ trace }: { trace: AgentTraceStep[] }) {
           <p className="mt-1 font-bold text-[#174832]">{totalDuration} ms</p>
         </div>
       </div>
+      {communicationLog.length > 0 ? (
+        <div className="mt-4 rounded-md border border-[#d9ded2] bg-[#fafbf8] p-3">
+          <p className="text-xs font-bold uppercase text-[#52645c]">
+            Agent message passing
+          </p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {communicationLog.map((message, index) => (
+              <div
+                key={`${message.from}-${message.to}-${message.type}-${index}`}
+                className="rounded-md bg-white px-3 py-2 text-xs leading-5"
+              >
+                <p className="font-bold text-[#174832]">
+                  {message.from} {"->"} {message.to}
+                </p>
+                <p className="font-semibold text-[#52645c]">{message.type}</p>
+                <p>{message.summary}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         {trace.map((entry, index) => (
           <div key={`${entry.step}-${index}`} className="rounded-md bg-[#fafbf8] p-3">

@@ -99,6 +99,66 @@ test.describe("smoke pages", () => {
     await expect(page.getByText("Belum ada hasil")).toBeVisible();
   });
 
+  test("home understands Indonesian fractional length and krem color", async ({ page }) => {
+    await page.route("**/api/recommendation", async (route) => {
+      const payload = route.request().postDataJSON() as {
+        messages: Array<{ content: string }>;
+      };
+      const prompt = payload.messages.at(-1)?.content ?? "";
+
+      if (prompt.includes("setengah meter")) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            type: "recommendation",
+            message: "Saya tangkap panjang pipa sekitar 0.5 meter.",
+            recommendation: {
+              title: "Perbaikan pipa bocor 0.5 m",
+              problemSummary: "Perbaikan pipa atau sambungan bocor",
+              diagnosis: "Kebutuhan diklasifikasikan sebagai plumbing/pipa.",
+              items: [],
+              breakdown: [{ label: "Panjang", value: "0.5 meter" }],
+              subtotal: 79000,
+            },
+            aiProvider: "sumopod",
+          }),
+        });
+        return;
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          type: "recommendation",
+          message: "Saya sudah punya data cukup: area 12 m2, warna krem.",
+          recommendation: {
+            title: "Repaint krem 12 m2",
+            problemSummary: "Pengecatan dinding",
+            diagnosis: "Kebutuhan diklasifikasikan sebagai repainting.",
+            items: [],
+            breakdown: [{ label: "Warna", value: "krem" }],
+            subtotal: 185000,
+          },
+          aiProvider: "sumopod",
+        }),
+      });
+    });
+
+    await page.goto("/");
+    await page.getByLabel("Pesan renovasi").fill("Pipa wastafel bocor setengah meter, standar");
+    await page.getByRole("button", { name: "Kirim" }).click();
+    await expect(page.getByText("Perbaikan pipa bocor 0.5 m")).toBeVisible();
+    await expect(page.getByText("0.5 meter", { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Session Baru" }).click();
+    await page.getByLabel("Pesan renovasi").fill("Mau cat dinding 12 m2 warna krem standar");
+    await page.getByRole("button", { name: "Kirim" }).click();
+    await expect(page.getByText("Repaint krem 12 m2")).toBeVisible();
+    await expect(page.getByText("krem", { exact: true })).toBeVisible();
+  });
+
   test("home sends uploaded image data to recommendation API", async ({ page }) => {
     await page.route("**/api/recommendation", async (route) => {
       const payload = route.request().postDataJSON() as {

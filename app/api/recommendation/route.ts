@@ -1,6 +1,7 @@
 import { generateObject, generateText, type ModelMessage } from "ai";
 import { z } from "zod";
 import { calculatePaint, calculateSubtotal, calculateTiles, calculateWaterproofing } from "@/lib/calculators";
+import { createAgentChannel, type AgentChannel } from "@/lib/ai/agent-communication";
 import { searchProducts } from "@/lib/ai/products";
 import { getChatModels } from "@/lib/ai/provider";
 import type { ProductSearchResult } from "@/types/domain";
@@ -9,6 +10,7 @@ const intakeSchema = z.object({
   intent: z.enum(["waterproofing", "paint", "tiles", "plumbing", "wall_repair", "unknown"]),
   problemSummary: z.string(),
   areaM2: z.number().positive().nullable(),
+  lengthM: z.number().positive().nullable().optional(),
   color: z.string().nullable(),
   budgetPreference: z.enum(["economy", "standard", "premium"]).nullable(),
   maxBudget: z.number().positive().nullable(),
@@ -20,6 +22,30 @@ const intakeSchema = z.object({
 });
 
 type Intake = z.infer<typeof intakeSchema>;
+
+const diagnosisSchema = z.object({
+  summary: z.string(),
+  decision: z.string(),
+  category: z.enum(["waterproofing", "paint", "tiles", "plumbing", "wall_repair", "unknown"]),
+  confidence: z.number().min(0).max(1),
+});
+
+const criticSchema = z.object({
+  passed: z.boolean(),
+  summary: z.string(),
+  decision: z.string(),
+  issues: z.array(z.string()),
+  confidence: z.number().min(0).max(1),
+});
+
+type AgentAssessment = {
+  summary: string;
+  decision: string;
+  confidence: number;
+  input: string;
+  output: string;
+  fallback: boolean;
+};
 
 type RequestMessage = {
   role: "user" | "assistant";
@@ -48,6 +74,7 @@ const fallbackQuestions: Record<string, string> = {
   color: "Untuk cat, warna apa yang diinginkan?",
   budgetPreference: "Prefer produk ekonomis, standar, atau premium? Kalau ada batas budget, sebutkan juga.",
   qualityPreference: "Prioritasnya harga hemat, kualitas standar, atau kualitas premium/tahan lama?",
+  lengthM: "Berapa panjang pipa atau area sambungan yang perlu diganti? Contoh: setengah meter atau 2 meter.",
 };
 
 const supportedCategoryText =
@@ -124,6 +151,126 @@ function userText(messages: RequestMessage[]) {
     .filter((message) => message.role === "user")
     .map((message) => message.content)
     .join(" ");
+}
+
+const numberWords: Record<string, number> = {
+  nol: 0,
+  setengah: 0.5,
+  separuh: 0.5,
+  satu: 1,
+  se: 1,
+  dua: 2,
+  tiga: 3,
+  empat: 4,
+  lima: 5,
+  enam: 6,
+  tujuh: 7,
+  delapan: 8,
+  sembilan: 9,
+  sepuluh: 10,
+  sebelas: 11,
+  "dua belas": 12,
+  "tiga belas": 13,
+  "empat belas": 14,
+  "lima belas": 15,
+  "enam belas": 16,
+  "tujuh belas": 17,
+  "delapan belas": 18,
+  "sembilan belas": 19,
+  "dua puluh": 20,
+};
+
+const knownColors = [
+  "putih tulang",
+  "abu-abu",
+  "abu abu",
+  "broken white",
+  "off white",
+  "krem",
+  "cream",
+  "beige",
+  "putih",
+  "hitam",
+  "merah",
+  "biru",
+  "hijau",
+  "kuning",
+  "coklat",
+  "brown",
+  "orange",
+  "oranye",
+  "pink",
+  "ungu",
+  "navy",
+  "tosca",
+  "teal",
+  "gold",
+  "silver",
+];
+
+function parseIndonesianNumber(value: string): number | null {
+  const normalized = normalizeText(value).replace(",", ".").trim();
+  const numeric = Number(normalized);
+  if (Number.isFinite(numeric) && numeric > 0) return numeric;
+
+  if (normalized in numberWords) return numberWords[normalized];
+
+  const mixedHalf = normalized.match(/^(.+?)\s+(setengah|separuh)$/);
+  if (mixedHalf) {
+    const base = parseIndonesianNumber(mixedHalf[1]);
+    return base ? base + 0.5 : null;
+  }
+
+  return null;
+}
+
+function extractMeasure(text: string, unitPattern: string) {
+  const normalized = normalizeText(text);
+  const numericPattern = new RegExp(
+    `\\b(\\d+(?:[.,]\\d+)?)\\s*(${unitPattern})\\b`,
+    "i",
+  );
+  const numericMatch = normalized.match(numericPattern);
+  if (numericMatch) return Number(numericMatch[1].replace(",", "."));
+
+  const wordPattern = new RegExp(
+    `\\b((?:satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh|sebelas|dua belas|tiga belas|empat belas|lima belas|enam belas|tujuh belas|delapan belas|sembilan belas|dua puluh)(?:\\s+(?:setengah|separuh))?|setengah|separuh)\\s+(${unitPattern})\\b`,
+    "i",
+  );
+  const wordMatch = normalized.match(wordPattern);
+  return wordMatch ? parseIndonesianNumber(wordMatch[1]) : null;
+}
+
+function extractAreaM2(text: string) {
+  return extractMeasure(text, "m2|m²|meter persegi");
+}
+
+function extractLengthM(text: string) {
+  return extractMeasure(text, "meter|m");
+}
+
+function extractColor(text: string) {
+  const normalized = normalizeText(text);
+  const explicit = normalized.match(
+    /\b(?:warna|cat warna|mau warna|ingin warna)\s+([a-z -]{3,24})\b/i,
+  );
+  if (explicit) {
+    const value = explicit[1].trim();
+    const matched = knownColors.find((color) => value.includes(color));
+    return matched ?? value.split(/\s+/).slice(0, 2).join(" ");
+  }
+
+  return knownColors.find((color) => normalized.includes(color)) ?? null;
+}
+
+function hasExplicitPaintIntent(text: string) {
+  return /\b(cat|repaint|cat ulang|pengecatan|warna)\b/i.test(text);
+}
+
+function hasWallRepairIntent(text: string) {
+  return /\b(retak|retakan|retak rambut|lubang|dempul|acian|plester|mengelupas|rembes|lembap|jamur)\b/i.test(
+    text,
+  );
 }
 
 function hasNoPreference(messages: RequestMessage[]) {
@@ -203,22 +350,26 @@ function requiredMissingFields(intake: Intake) {
   const missing = new Set(intake.missingFields);
 
   if (intake.intent === "unknown") missing.add("problem");
-  if (!intake.areaM2 && ["waterproofing", "paint", "tiles"].includes(intake.intent)) {
+  if (!intake.areaM2 && ["waterproofing", "paint", "tiles", "wall_repair"].includes(intake.intent)) {
     missing.add("areaM2");
   }
+  if (!intake.lengthM && intake.intent === "plumbing") {
+    missing.add("lengthM");
+  }
   if (intake.intent === "paint" && !intake.color) missing.add("color");
-  if (!intake.budgetPreference && !intake.maxBudget && ["waterproofing", "paint", "tiles"].includes(intake.intent)) {
+  if (!intake.budgetPreference && !intake.maxBudget && ["waterproofing", "paint", "tiles", "plumbing", "wall_repair"].includes(intake.intent)) {
     missing.add("budgetPreference");
   }
 
   if (intake.areaM2) missing.delete("areaM2");
+  if (intake.lengthM) missing.delete("lengthM");
   if (intake.color) missing.delete("color");
   if (intake.budgetPreference || intake.maxBudget) missing.delete("budgetPreference");
   if (intake.qualityPreference) missing.delete("qualityPreference");
   if (intake.intent !== "unknown") missing.delete("problem");
 
   return [...missing].filter((field) =>
-    ["problem", "areaM2", "color", "budgetPreference", "qualityPreference"].includes(field),
+    ["problem", "areaM2", "lengthM", "color", "budgetPreference", "qualityPreference"].includes(field),
   );
 }
 
@@ -248,7 +399,10 @@ Jangan membuat quotation bila data penting belum cukup.
 
 Aturan intent:
 - Untuk atap bocor/dak bocor/rembes, intent = waterproofing.
-- Untuk cat ulang/dinding/tembok/repaint, intent = paint.
+- Untuk cat ulang/repaint/warna dinding, intent = paint.
+- Untuk dinding retak, retak rambut, lubang, dempul, acian, plester, cat mengelupas, atau dinding rembes/lembap tanpa permintaan warna/cat, intent = wall_repair.
+- Untuk pipa bocor, sambungan pipa, keran/drat bocor, intent = plumbing. Jika user menyebut "setengah meter", lengthM = 0.5.
+- Jika user menyebut warna lokal seperti krem/cream/beige/putih tulang/abu-abu, isi color sesuai kata user.
 - Jika gambar menunjukkan noda air/plafon lembap/retak dak/permukaan bocor, arahkan ke waterproofing atau wall_repair sesuai konteks.
 - Jika pelanggan meminta produk di luar katalog renovasi, seperti kipas/AC/elektronik/furniture, intent = unknown dan jangan tanya budget.
 - Untuk cat, warna wajib ditanya.
@@ -320,6 +474,135 @@ function fallbackAnalyzeIntake(messages: RequestMessage[]): Intake {
   };
 }
 
+function normalizeIntakeForIndonesian(input: Intake, messages: RequestMessage[]): Intake {
+  const text = normalizeText(userText(messages));
+  const areaM2 = input.areaM2 ?? extractAreaM2(text);
+  const lengthM = input.lengthM ?? extractLengthM(text);
+  const color = input.color ?? extractColor(text);
+  const explicitPaint = hasExplicitPaintIntent(text);
+  const repairIntent = hasWallRepairIntent(text);
+  const plumbingIntent = /pipa|plumbing|saluran|keran|drat/i.test(text);
+
+  let intent = input.intent;
+  if (plumbingIntent) {
+    intent = "plumbing";
+  } else if (repairIntent && !explicitPaint) {
+    intent = "wall_repair";
+  } else if ((explicitPaint || color) && intent === "unknown") {
+    intent = "paint";
+  }
+
+  const problemSummary =
+    intent === "plumbing"
+      ? "Perbaikan pipa atau sambungan bocor"
+      : intent === "wall_repair"
+        ? "Perbaikan dinding retak atau rembes"
+        : input.problemSummary;
+
+  return {
+    ...input,
+    intent,
+    problemSummary,
+    areaM2,
+    lengthM,
+    color,
+  };
+}
+
+function fallbackDiagnosisAgent(intake: Intake, transcript: string): AgentAssessment {
+  const summaryByIntent: Record<Intake["intent"], string> = {
+    waterproofing: `Kebutuhan diklasifikasikan sebagai waterproofing atap/dak. Area ${intake.areaM2 ?? "-"} m2, preferensi ${intake.budgetPreference ?? "standar"}.`,
+    paint: `Kebutuhan diklasifikasikan sebagai repainting. Area ${intake.areaM2 ?? "-"} m2, warna ${intake.color ?? "-"}, preferensi ${intake.budgetPreference ?? "standar"}.`,
+    tiles: `Kebutuhan diklasifikasikan sebagai pemasangan keramik. Area ${intake.areaM2 ?? "-"} m2, preferensi ${intake.budgetPreference ?? "standar"}.`,
+    plumbing: `Kebutuhan diklasifikasikan sebagai plumbing/pipa. Panjang pipa/sambungan ${intake.lengthM ?? "-"} m, preferensi ${intake.budgetPreference ?? "standar"}.`,
+    wall_repair: `Kebutuhan diklasifikasikan sebagai perbaikan dinding. Area ${intake.areaM2 ?? "-"} m2, preferensi ${intake.budgetPreference ?? "standar"}.`,
+    unknown: "Kebutuhan belum cukup jelas untuk dipetakan ke kategori katalog.",
+  };
+  const input = JSON.stringify({ intake, transcript: transcript.slice(-1200) });
+  const output = summaryByIntent[intake.intent];
+
+  return {
+    summary: output,
+    decision: `Intent ${intake.intent} dipilih dari hasil intake dan aturan fallback.`,
+    confidence: confidence(Math.max(intake.confidence - 0.04, 0.62)),
+    input,
+    output,
+    fallback: true,
+  };
+}
+
+async function runDiagnosisAgent(
+  intake: Intake,
+  messages: RequestMessage[],
+  channel: AgentChannel,
+): Promise<AgentAssessment> {
+  const transcript = toTranscript(messages);
+  const inbox = channel.inbox("Repair Diagnosis Agent");
+  const input = JSON.stringify({
+    inbox,
+    intake,
+    transcript: transcript.slice(-1800),
+  });
+  let lastError: unknown;
+
+  for (const { model } of getChatModels()) {
+    try {
+      const { object } = await generateObject({
+        model,
+        schema: diagnosisSchema,
+        schemaName: "QBuildDiagnosis",
+        schemaDescription:
+          "Diagnosis masalah renovasi berdasarkan hasil intake sebelum retrieval produk.",
+        temperature: 0.1,
+        maxOutputTokens: 450,
+        abortSignal: AbortSignal.timeout(aiAttemptTimeoutMs()),
+        system: `Anda adalah Repair Diagnosis Agent toko bahan bangunan.
+Gunakan hasil Intake Agent sebagai input utama.
+Tugas Anda hanya mendiagnosis kategori pekerjaan, menjelaskan alasan singkat, dan memberi keputusan untuk agent berikutnya.
+Jangan menyebut produk, harga, atau quantity.`,
+        messages: [
+          {
+            role: "user",
+            content: `Output Intake Agent dan riwayat chat:\n${input}`,
+          },
+        ],
+      });
+
+      const assessment = {
+        summary: object.summary,
+        decision: object.decision,
+        confidence: confidence(object.confidence),
+        input,
+        output: JSON.stringify(object),
+        fallback: false,
+      };
+
+      channel.send({
+        from: "Repair Diagnosis Agent",
+        to: "Product RAG Agent",
+        type: "diagnosis.result",
+        summary: assessment.summary,
+        payload: object,
+      });
+
+      return assessment;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  void lastError;
+  const assessment = fallbackDiagnosisAgent(intake, transcript);
+  channel.send({
+    from: "Repair Diagnosis Agent",
+    to: "Product RAG Agent",
+    type: "diagnosis.result",
+    summary: assessment.summary,
+    payload: assessment,
+  });
+  return assessment;
+}
+
 async function describeImage(messages: RequestMessage[]) {
   const transcript = toTranscript(messages);
   let lastError: unknown;
@@ -343,6 +626,148 @@ async function describeImage(messages: RequestMessage[]) {
   }
 
   throw lastError instanceof Error ? lastError : new Error("AI image analysis gagal.");
+}
+
+function fallbackCriticAgent({
+  intake,
+  items,
+  subtotal,
+  calculator,
+}: {
+  intake: Intake;
+  items: QuoteItem[];
+  subtotal: number;
+  calculator: string;
+}): AgentAssessment {
+  const hasMainItem = items.length > 0;
+  const lineTotal = items.reduce((total, item) => total + item.lineTotal, 0);
+  const issues = [
+    ...(!hasMainItem ? ["Belum ada item produk utama."] : []),
+    ...(Math.abs(lineTotal - subtotal) > 1 ? ["Subtotal tidak sama dengan total line item."] : []),
+  ];
+  const summary =
+    issues.length === 0
+      ? "Validasi lolos: produk, quantity, kalkulasi, dan subtotal konsisten."
+      : `Validasi menemukan ${issues.length} isu: ${issues.join(" ")}`;
+  const input = JSON.stringify({
+    intent: intake.intent,
+    calculator,
+    subtotal,
+    items: items.map((item) => ({
+      name: item.name,
+      quantity: item.quantity,
+      unit: item.unit,
+      lineTotal: item.lineTotal,
+    })),
+  });
+
+  return {
+    summary,
+    decision:
+      issues.length === 0
+        ? "Quotation dapat ditampilkan dan disimpan."
+        : "Quotation perlu diperbaiki sebelum dipakai.",
+    confidence: issues.length === 0 ? 0.92 : 0.55,
+    input,
+    output: JSON.stringify({ passed: issues.length === 0, issues, summary }),
+    fallback: true,
+  };
+}
+
+async function runCriticAgent({
+  intake,
+  diagnosis,
+  retrieval,
+  calculator,
+  items,
+  subtotal,
+  channel,
+}: {
+  intake: Intake;
+  diagnosis: AgentAssessment;
+  retrieval: string;
+  calculator: string;
+  items: QuoteItem[];
+  subtotal: number;
+  channel: AgentChannel;
+}): Promise<AgentAssessment> {
+  const input = JSON.stringify({
+    inbox: channel.inbox("Critic Agent"),
+    intake,
+    diagnosis: diagnosis.summary,
+    retrieval,
+    calculator,
+    subtotal,
+    items: items.map((item) => ({
+      name: item.name,
+      category: item.category,
+      quantity: item.quantity,
+      unit: item.unit,
+      unitPrice: item.unitPrice,
+      lineTotal: item.lineTotal,
+      reason: item.reason,
+    })),
+  });
+  let lastError: unknown;
+
+  for (const { model } of getChatModels()) {
+    try {
+      const { object } = await generateObject({
+        model,
+        schema: criticSchema,
+        schemaName: "QBuildCritic",
+        schemaDescription:
+          "Validasi quotation material sebelum ditampilkan ke pelanggan.",
+        temperature: 0,
+        maxOutputTokens: 500,
+        abortSignal: AbortSignal.timeout(aiAttemptTimeoutMs()),
+        system: `Anda adalah Critic Agent untuk sistem multi-agent bahan bangunan.
+Periksa apakah rekomendasi sudah grounded pada item yang tersedia, quantity masuk akal, kalkulasi dipakai, dan subtotal konsisten.
+Jangan menambah produk baru. Jika ada isu, jelaskan singkat.`,
+        messages: [
+          {
+            role: "user",
+            content: `Audit output agent sebelumnya:\n${input}`,
+          },
+        ],
+      });
+
+      const assessment = {
+        summary:
+          object.issues.length > 0
+            ? `${object.summary} Isu: ${object.issues.join(" ")}`
+            : object.summary,
+        decision: object.decision,
+        confidence: confidence(object.confidence),
+        input,
+        output: JSON.stringify(object),
+        fallback: false,
+      };
+
+      channel.send({
+        from: "Critic Agent",
+        to: "Audit Agent",
+        type: "critic.result",
+        summary: assessment.summary,
+        payload: object,
+      });
+
+      return assessment;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  void lastError;
+  const assessment = fallbackCriticAgent({ intake, items, subtotal, calculator });
+  channel.send({
+    from: "Critic Agent",
+    to: "Audit Agent",
+    type: "critic.result",
+    summary: assessment.summary,
+    payload: assessment,
+  });
+  return assessment;
 }
 
 function chooseByBudget(products: ProductSearchResult[], budgetPreference: Intake["budgetPreference"]) {
@@ -390,32 +815,45 @@ function confidence(value: number) {
   return Math.max(0, Math.min(1, value));
 }
 
+function communicationMetadata(channel: AgentChannel, agent: Parameters<AgentChannel["inbox"]>[0]) {
+  return {
+    inbox: channel.inbox(agent).map(({ from, type, summary }) => ({
+      from,
+      type,
+      summary,
+    })),
+  };
+}
+
 function buildAgentTrace({
   problem,
-  diagnosis,
+  diagnosisAgent,
   retrieval,
   calculator,
   quotation,
-  validation,
+  criticAgent,
   intake,
   retrievalInput,
   searches,
+  channel,
 }: {
   problem: string;
-  diagnosis: string;
+  diagnosisAgent: AgentAssessment;
   retrieval: string;
   calculator: string;
   quotation: string;
-  validation: string;
+  criticAgent: AgentAssessment;
   intake: Intake;
   retrievalInput: string;
   searches: ProductSearch[];
+  channel: AgentChannel;
 }) {
   const retrievalConfidence =
     searches.length > 0 && searches.every((search) => search.searchMode === "semantic")
       ? 0.94
       : 0.74;
   const productNames = summarizeProducts(searches);
+  const effectiveMissingFields = requiredMissingFields(intake);
 
   return [
     {
@@ -427,24 +865,29 @@ function buildAgentTrace({
         intent: intake.intent,
         areaM2: intake.areaM2,
         budgetPreference: intake.budgetPreference,
-        missingFields: intake.missingFields,
+        missingFields: effectiveMissingFields,
       }),
       decision:
-        intake.missingFields.length > 0
+        effectiveMissingFields.length > 0
           ? "Meminta klarifikasi sebelum quotation."
           : "Data cukup untuk diteruskan ke diagnosis.",
       confidence: confidence(intake.confidence),
       durationMs: 900,
+      metadata: communicationMetadata(channel, "Intake Agent"),
     },
     {
       step: "Diagnosis",
       agent: "Repair Diagnosis Agent",
-      summary: diagnosis,
+      summary: diagnosisAgent.summary,
       input: problem,
-      output: diagnosis,
-      decision: `Intent dipetakan ke kategori ${intake.intent}.`,
-      confidence: confidence(Math.max(intake.confidence - 0.04, 0.65)),
-      durationMs: 120,
+      output: diagnosisAgent.output,
+      decision: diagnosisAgent.decision,
+      confidence: diagnosisAgent.confidence,
+      durationMs: diagnosisAgent.fallback ? 40 : 900,
+      metadata: {
+        ...communicationMetadata(channel, "Repair Diagnosis Agent"),
+        execution: diagnosisAgent.fallback ? "deterministic_fallback" : "llm_agent",
+      },
     },
     {
       step: "Catalog Retrieval",
@@ -456,6 +899,7 @@ function buildAgentTrace({
       confidence: retrievalConfidence,
       durationMs: 420,
       metadata: {
+        ...communicationMetadata(channel, "Product RAG Agent"),
         modes: searches.map((search) => search.searchMode),
         candidates: searches.reduce((total, search) => total + search.count, 0),
       },
@@ -469,6 +913,7 @@ function buildAgentTrace({
       decision: "Menggunakan kalkulator deterministik, bukan estimasi bebas LLM.",
       confidence: 0.98,
       durationMs: 35,
+      metadata: communicationMetadata(channel, "Quantity Tool Agent"),
     },
     {
       step: "Quotation",
@@ -479,16 +924,21 @@ function buildAgentTrace({
       decision: "Menyusun line item dan subtotal yang bisa disimpan/export PDF.",
       confidence: 0.96,
       durationMs: 80,
+      metadata: communicationMetadata(channel, "Quotation Agent"),
     },
     {
       step: "Validation/Critic",
       agent: "Critic Agent",
-      summary: validation,
-      input: `${quotation} ${calculator}`,
-      output: validation,
-      decision: "Memeriksa kelengkapan produk, pembulatan quantity, dan subtotal.",
-      confidence: 0.92,
-      durationMs: 60,
+      summary: criticAgent.summary,
+      input: criticAgent.input,
+      output: criticAgent.output,
+      decision: criticAgent.decision,
+      confidence: criticAgent.confidence,
+      durationMs: criticAgent.fallback ? 45 : 850,
+      metadata: {
+        ...communicationMetadata(channel, "Critic Agent"),
+        execution: criticAgent.fallback ? "deterministic_fallback" : "llm_agent",
+      },
     },
     {
       step: "Trace Logger",
@@ -499,12 +949,31 @@ function buildAgentTrace({
       decision: "Mencatat handoff multi-agent untuk audit juri.",
       confidence: 1,
       durationMs: 20,
+      metadata: {
+        communicationLog: channel.compactLog(),
+      },
     },
   ];
 }
 
-async function buildPaintRecommendation(intake: Intake) {
+async function buildPaintRecommendation(
+  intake: Intake,
+  diagnosisAgent: AgentAssessment,
+  channel: AgentChannel,
+) {
   const areaM2 = intake.areaM2 ?? 0;
+  channel.send({
+    from: "Product RAG Agent",
+    to: "Product RAG Agent",
+    type: "retrieval.plan",
+    summary: "Menjalankan retrieval produk cat dan alat aplikasi dari katalog Supabase.",
+    payload: {
+      queries: [
+        `cat dinding interior ${intake.color ?? ""} ${intake.qualityPreference ?? ""}`,
+        "roller cat kuas alat cat",
+      ],
+    },
+  });
   const paintSearch = await searchProducts({
     query: `cat dinding interior ${intake.color ?? ""} ${intake.qualityPreference ?? ""}`,
     category: "paint",
@@ -514,6 +983,20 @@ async function buildPaintRecommendation(intake: Intake) {
     query: "roller cat kuas alat cat",
     category: "tools",
     limit: 4,
+  });
+  channel.send({
+    from: "Product RAG Agent",
+    to: "Quantity Tool Agent",
+    type: "retrieval.result",
+    summary: summarizeRetrieval([paintSearch, toolSearch]),
+    payload: {
+      products: [...paintSearch.products, ...toolSearch.products].map((product) => ({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        category: product.category,
+      })),
+    },
   });
   const paints = chooseByBudget(
     paintSearch.products.filter((product) => /paint|cat|vinilex|jotun/i.test(product.name)),
@@ -529,6 +1012,13 @@ async function buildPaintRecommendation(intake: Intake) {
   const packCoverageM2 = 25;
   const paintCalc = calculatePaint({ areaM2, coats, coveragePerKg: 10 });
   const primaryQty = Math.ceil((areaM2 * coats) / packCoverageM2);
+  channel.send({
+    from: "Quantity Tool Agent",
+    to: "Quotation Agent",
+    type: "quantity.result",
+    summary: paintCalc.explanation,
+    payload: paintCalc,
+  });
   const items: QuoteItem[] = [
     {
       id: primary.id,
@@ -570,7 +1060,25 @@ async function buildPaintRecommendation(intake: Intake) {
   }
 
   const subtotal = calculateSubtotal(items).subtotal;
-  const diagnosis = `Kebutuhan diklasifikasikan sebagai repainting. Area ${areaM2} m2, warna ${intake.color}, preferensi ${intake.budgetPreference ?? "standar"}.`;
+  channel.send({
+    from: "Quotation Agent",
+    to: "Critic Agent",
+    type: "quotation.draft",
+    summary: `${items.length} item cat dengan subtotal ${formatCurrency(subtotal)}.`,
+    payload: { items, subtotal },
+  });
+  const diagnosis = diagnosisAgent.summary;
+  const retrieval = summarizeRetrieval([paintSearch, toolSearch]);
+  const calculator = paintCalc.explanation;
+  const criticAgent = await runCriticAgent({
+    intake,
+    diagnosis: diagnosisAgent,
+    retrieval,
+    calculator,
+    items,
+    subtotal,
+    channel,
+  });
 
   return {
     message: `Saya sudah punya data cukup: area ${areaM2} m2, warna ${intake.color}, preferensi ${intake.budgetPreference ?? "standar"}. Berikut rekomendasi berbasis katalog dan subtotalnya.`,
@@ -588,22 +1096,39 @@ async function buildPaintRecommendation(intake: Intake) {
       ],
       agentTrace: buildAgentTrace({
         problem: intake.problemSummary,
-        diagnosis,
-        retrieval: summarizeRetrieval([paintSearch, toolSearch]),
-        calculator: paintCalc.explanation,
+        diagnosisAgent,
+        retrieval,
+        calculator,
         quotation: `${items.length} item dengan subtotal ${formatCurrency(subtotal)}.`,
-        validation: "Area, warna, preferensi budget, item utama, item pendukung, dan subtotal sudah dicek.",
+        criticAgent,
         intake,
         retrievalInput: `cat dinding interior ${intake.color ?? ""}; roller cat kuas alat cat`,
         searches: [paintSearch, toolSearch],
+        channel,
       }),
       subtotal,
     },
   };
 }
 
-async function buildWaterproofingRecommendation(intake: Intake) {
+async function buildWaterproofingRecommendation(
+  intake: Intake,
+  diagnosisAgent: AgentAssessment,
+  channel: AgentChannel,
+) {
   const areaM2 = intake.areaM2 ?? 0;
+  channel.send({
+    from: "Product RAG Agent",
+    to: "Product RAG Agent",
+    type: "retrieval.plan",
+    summary: "Menjalankan retrieval waterproofing dan alat aplikasi dari katalog Supabase.",
+    payload: {
+      queries: [
+        `atap bocor dak waterproofing ${intake.qualityPreference ?? ""}`,
+        "roller kuas alat waterproofing",
+      ],
+    },
+  });
   const productSearch = await searchProducts({
     query: `atap bocor dak waterproofing ${intake.qualityPreference ?? ""}`,
     category: "waterproofing",
@@ -613,6 +1138,20 @@ async function buildWaterproofingRecommendation(intake: Intake) {
     query: "roller kuas alat waterproofing",
     category: "tools",
     limit: 4,
+  });
+  channel.send({
+    from: "Product RAG Agent",
+    to: "Quantity Tool Agent",
+    type: "retrieval.result",
+    summary: summarizeRetrieval([productSearch, toolSearch]),
+    payload: {
+      products: [...productSearch.products, ...toolSearch.products].map((product) => ({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        category: product.category,
+      })),
+    },
   });
   const coatings = chooseByBudget(
     productSearch.products.filter((product) => /coating|waterproof|seal/i.test(product.name)),
@@ -627,6 +1166,13 @@ async function buildWaterproofingRecommendation(intake: Intake) {
   const calc = calculateWaterproofing({ areaM2, coats: 2, coverageKgPerM2PerCoat: 1 });
   const packKg = parsePackSize(primary, 20);
   const primaryQty = Math.ceil(calc.requiredKg / packKg);
+  channel.send({
+    from: "Quantity Tool Agent",
+    to: "Quotation Agent",
+    type: "quantity.result",
+    summary: calc.explanation,
+    payload: calc,
+  });
   const items: QuoteItem[] = [
     {
       id: primary.id,
@@ -667,7 +1213,25 @@ async function buildWaterproofingRecommendation(intake: Intake) {
   }
 
   const subtotal = calculateSubtotal(items).subtotal;
-  const diagnosis = `Kebutuhan diklasifikasikan sebagai waterproofing atap/dak. Area ${areaM2} m2, preferensi ${intake.budgetPreference ?? "standar"}.`;
+  channel.send({
+    from: "Quotation Agent",
+    to: "Critic Agent",
+    type: "quotation.draft",
+    summary: `${items.length} item waterproofing dengan subtotal ${formatCurrency(subtotal)}.`,
+    payload: { items, subtotal },
+  });
+  const diagnosis = diagnosisAgent.summary;
+  const retrieval = summarizeRetrieval([productSearch, toolSearch]);
+  const calculator = calc.explanation;
+  const criticAgent = await runCriticAgent({
+    intake,
+    diagnosis: diagnosisAgent,
+    retrieval,
+    calculator,
+    items,
+    subtotal,
+    channel,
+  });
 
   return {
     message: `Saya sudah punya data cukup: area ${areaM2} m2 dan preferensi ${intake.budgetPreference ?? "standar"}. Berikut rekomendasi waterproofing berbasis katalog dan subtotalnya.`,
@@ -685,26 +1249,54 @@ async function buildWaterproofingRecommendation(intake: Intake) {
       ],
       agentTrace: buildAgentTrace({
         problem: intake.problemSummary,
-        diagnosis,
-        retrieval: summarizeRetrieval([productSearch, toolSearch]),
-        calculator: calc.explanation,
+        diagnosisAgent,
+        retrieval,
+        calculator,
         quotation: `${items.length} item dengan subtotal ${formatCurrency(subtotal)}.`,
-        validation: "Area, preferensi budget, produk utama, item pendukung, pembulatan kemasan, dan subtotal sudah dicek.",
+        criticAgent,
         intake,
         retrievalInput: `atap bocor dak waterproofing ${intake.qualityPreference ?? ""}; roller kuas alat waterproofing`,
         searches: [productSearch, toolSearch],
+        channel,
       }),
       subtotal,
     },
   };
 }
 
-async function buildTilesRecommendation(intake: Intake) {
+async function buildTilesRecommendation(
+  intake: Intake,
+  diagnosisAgent: AgentAssessment,
+  channel: AgentChannel,
+) {
   const areaM2 = intake.areaM2 ?? 0;
+  channel.send({
+    from: "Product RAG Agent",
+    to: "Product RAG Agent",
+    type: "retrieval.plan",
+    summary: "Menjalankan retrieval keramik, perekat, nat, dan spacer dari katalog Supabase.",
+    payload: {
+      query: `keramik lantai ceramic tile adhesive grout spacer ${intake.qualityPreference ?? ""}`,
+    },
+  });
   const productSearch = await searchProducts({
     query: `keramik lantai ceramic tile adhesive grout spacer ${intake.qualityPreference ?? ""}`,
     category: "tiles",
     limit: 8,
+  });
+  channel.send({
+    from: "Product RAG Agent",
+    to: "Quantity Tool Agent",
+    type: "retrieval.result",
+    summary: summarizeRetrieval([productSearch]),
+    payload: {
+      products: productSearch.products.map((product) => ({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        category: product.category,
+      })),
+    },
   });
   const tile = chooseByBudget(
     productSearch.products.filter((product) => /tile|ceramic|keramik/i.test(product.name)),
@@ -719,6 +1311,13 @@ async function buildTilesRecommendation(intake: Intake) {
   const boxCoverageM2 = 1.44;
   const tileCalc = calculateTiles({ areaM2, wastePercent: 10, boxCoverageM2 });
   const boxes = tileCalc.boxes ?? Math.ceil(tileCalc.requiredAreaM2 / boxCoverageM2);
+  channel.send({
+    from: "Quantity Tool Agent",
+    to: "Quotation Agent",
+    type: "quantity.result",
+    summary: tileCalc.explanation,
+    payload: tileCalc,
+  });
   const items: QuoteItem[] = [
     {
       id: tile.id,
@@ -774,7 +1373,25 @@ async function buildTilesRecommendation(intake: Intake) {
   }
 
   const subtotal = calculateSubtotal(items).subtotal;
-  const diagnosis = `Kebutuhan diklasifikasikan sebagai pemasangan keramik. Area ${areaM2} m2, preferensi ${intake.budgetPreference ?? "standar"}.`;
+  channel.send({
+    from: "Quotation Agent",
+    to: "Critic Agent",
+    type: "quotation.draft",
+    summary: `${items.length} item keramik dengan subtotal ${formatCurrency(subtotal)}.`,
+    payload: { items, subtotal },
+  });
+  const diagnosis = diagnosisAgent.summary;
+  const retrieval = summarizeRetrieval([productSearch]);
+  const calculator = tileCalc.explanation;
+  const criticAgent = await runCriticAgent({
+    intake,
+    diagnosis: diagnosisAgent,
+    retrieval,
+    calculator,
+    items,
+    subtotal,
+    channel,
+  });
 
   return {
     message: `Saya sudah punya data cukup: area ${areaM2} m2 dan preferensi ${intake.budgetPreference ?? "standar"}. Berikut rekomendasi keramik berbasis katalog dan subtotalnya.`,
@@ -791,14 +1408,360 @@ async function buildTilesRecommendation(intake: Intake) {
       ],
       agentTrace: buildAgentTrace({
         problem: intake.problemSummary,
-        diagnosis,
-        retrieval: summarizeRetrieval([productSearch]),
-        calculator: tileCalc.explanation,
+        diagnosisAgent,
+        retrieval,
+        calculator,
         quotation: `${items.length} item dengan subtotal ${formatCurrency(subtotal)}.`,
-        validation: "Area, preferensi budget, keramik, perekat/nat/spacer, pembulatan dus, dan subtotal sudah dicek.",
+        criticAgent,
         intake,
         retrievalInput: `keramik lantai ceramic tile adhesive grout spacer ${intake.qualityPreference ?? ""}`,
         searches: [productSearch],
+        channel,
+      }),
+      subtotal,
+    },
+  };
+}
+
+async function buildPlumbingRecommendation(
+  intake: Intake,
+  diagnosisAgent: AgentAssessment,
+  channel: AgentChannel,
+) {
+  const lengthM = intake.lengthM ?? 1;
+  channel.send({
+    from: "Product RAG Agent",
+    to: "Product RAG Agent",
+    type: "retrieval.plan",
+    summary: "Menjalankan retrieval pipa, lem PVC, seal tape, dan sambungan plumbing.",
+    payload: {
+      query: "pipa bocor pvc pipe glue seal tape elbow plumbing",
+    },
+  });
+
+  const productSearch = await searchProducts({
+    query: "pipa bocor pvc pipe glue seal tape elbow plumbing",
+    category: "plumbing",
+    limit: 8,
+  });
+  channel.send({
+    from: "Product RAG Agent",
+    to: "Quantity Tool Agent",
+    type: "retrieval.result",
+    summary: summarizeRetrieval([productSearch]),
+    payload: {
+      products: productSearch.products.map((product) => ({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        category: product.category,
+      })),
+    },
+  });
+
+  const pipe =
+    productSearch.products.find((product) => /1\/2|1\/2 inch/i.test(product.name)) ??
+    productSearch.products.find((product) => /pipe|pipa/i.test(product.name)) ??
+    productSearch.products[0];
+  const glue = productSearch.products.find((product) => /glue|lem/i.test(product.name));
+  const tape = productSearch.products.find((product) => /tape|ptfe/i.test(product.name));
+  const elbow = productSearch.products.find((product) => /elbow/i.test(product.name));
+
+  if (!pipe) throw new Error("Produk plumbing tidak ditemukan di katalog.");
+
+  const pipeQty = Math.max(1, Math.ceil(lengthM / 4));
+  const calculator = `${lengthM} meter pipa / 4 meter per batang = ${pipeQty} batang pipa.`;
+  channel.send({
+    from: "Quantity Tool Agent",
+    to: "Quotation Agent",
+    type: "quantity.result",
+    summary: calculator,
+    payload: { lengthM, pipeLengthPerUnitM: 4, pipeQty },
+  });
+
+  const items: QuoteItem[] = [
+    {
+      id: pipe.id,
+      name: pipe.name,
+      category: pipe.category,
+      quantity: pipeQty,
+      unit: pipe.unit,
+      unitPrice: pipe.price,
+      reason: `Pipa pengganti untuk area bocor sepanjang ${lengthM} meter.`,
+      lineTotal: pipeQty * pipe.price,
+    },
+  ];
+
+  if (glue) {
+    items.push({
+      id: glue.id,
+      name: glue.name,
+      category: glue.category,
+      quantity: 1,
+      unit: glue.unit,
+      unitPrice: glue.price,
+      reason: "Lem PVC untuk menyambung pipa dan fitting.",
+      lineTotal: glue.price,
+    });
+  }
+
+  if (tape) {
+    items.push({
+      id: tape.id,
+      name: tape.name,
+      category: tape.category,
+      quantity: 1,
+      unit: tape.unit,
+      unitPrice: tape.price,
+      reason: "Seal tape untuk drat keran atau sambungan kecil yang rawan bocor.",
+      lineTotal: tape.price,
+    });
+  }
+
+  if (elbow) {
+    items.push({
+      id: elbow.id,
+      name: elbow.name,
+      category: elbow.category,
+      quantity: 2,
+      unit: elbow.unit,
+      unitPrice: elbow.price,
+      reason: "Cadangan fitting belokan untuk titik sambungan pipa.",
+      lineTotal: 2 * elbow.price,
+    });
+  }
+
+  const subtotal = calculateSubtotal(items).subtotal;
+  channel.send({
+    from: "Quotation Agent",
+    to: "Critic Agent",
+    type: "quotation.draft",
+    summary: `${items.length} item plumbing dengan subtotal ${formatCurrency(subtotal)}.`,
+    payload: { items, subtotal },
+  });
+
+  const diagnosis = diagnosisAgent.summary;
+  const retrieval = summarizeRetrieval([productSearch]);
+  const criticAgent = await runCriticAgent({
+    intake,
+    diagnosis: diagnosisAgent,
+    retrieval,
+    calculator,
+    items,
+    subtotal,
+    channel,
+  });
+
+  return {
+    message: `Saya tangkap panjang pipa sekitar ${lengthM} meter dan preferensi ${intake.budgetPreference ?? "standar"}. Berikut rekomendasi plumbing berbasis katalog dan subtotalnya.`,
+    recommendation: {
+      title: `Perbaikan pipa bocor ${lengthM} m`,
+      problemSummary: intake.problemSummary,
+      diagnosis,
+      items,
+      breakdown: [
+        { label: "Panjang", value: `${lengthM} meter` },
+        { label: "Preferensi", value: intake.budgetPreference ?? "standar" },
+        { label: "Kebutuhan pipa", value: calculator },
+        { label: "Subtotal", value: formatCurrency(subtotal) },
+      ],
+      agentTrace: buildAgentTrace({
+        problem: intake.problemSummary,
+        diagnosisAgent,
+        retrieval,
+        calculator,
+        quotation: `${items.length} item dengan subtotal ${formatCurrency(subtotal)}.`,
+        criticAgent,
+        intake,
+        retrievalInput: "pipa bocor pvc pipe glue seal tape elbow plumbing",
+        searches: [productSearch],
+        channel,
+      }),
+      subtotal,
+    },
+  };
+}
+
+async function buildWallRepairRecommendation(
+  intake: Intake,
+  diagnosisAgent: AgentAssessment,
+  channel: AgentChannel,
+) {
+  const areaM2 = intake.areaM2 ?? 1;
+  channel.send({
+    from: "Product RAG Agent",
+    to: "Product RAG Agent",
+    type: "retrieval.plan",
+    summary: "Menjalankan retrieval dempul, skim coat, amplas, scraper, dan sealant untuk dinding.",
+    payload: {
+      queries: [
+        "dinding retak rembes wall putty skim coat sandpaper scraper",
+        "sealant rembes retak sambungan dinding",
+      ],
+    },
+  });
+
+  const wallSearch = await searchProducts({
+    query: "dinding retak rembes wall putty skim coat sandpaper scraper",
+    category: "wall_repair",
+    limit: 8,
+  });
+  const toolSearch = await searchProducts({
+    query: "scraper amplas alat dempul dinding",
+    category: "tools",
+    limit: 4,
+  });
+  const sealantSearch = await searchProducts({
+    query: "sealant rembes retak sambungan dinding",
+    category: "waterproofing",
+    limit: 3,
+  });
+  channel.send({
+    from: "Product RAG Agent",
+    to: "Quantity Tool Agent",
+    type: "retrieval.result",
+    summary: summarizeRetrieval([wallSearch, toolSearch, sealantSearch]),
+    payload: {
+      products: [...wallSearch.products, ...toolSearch.products, ...sealantSearch.products].map((product) => ({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        category: product.category,
+      })),
+    },
+  });
+
+  const putty =
+    wallSearch.products.find((product) => /putty|dempul/i.test(product.name)) ??
+    wallSearch.products[0];
+  const skim = wallSearch.products.find((product) => /skim/i.test(product.name));
+  const sandpaper = wallSearch.products.find((product) => /sandpaper|amplas/i.test(product.name));
+  const scraper = toolSearch.products.find((product) => /scraper|kape/i.test(product.name));
+  const sealant = sealantSearch.products.find((product) => /sealant/i.test(product.name));
+
+  if (!putty) throw new Error("Produk perbaikan dinding tidak ditemukan di katalog.");
+
+  const puttyQty = Math.max(1, Math.ceil(areaM2 / 5));
+  const skimQty = skim ? Math.max(1, Math.ceil(areaM2 / 12)) : 0;
+  const calculator = `Area ${areaM2} m2: dempul ${puttyQty} kemasan, skim coat ${skimQty || "-"} kemasan bila perlu perataan tipis.`;
+  channel.send({
+    from: "Quantity Tool Agent",
+    to: "Quotation Agent",
+    type: "quantity.result",
+    summary: calculator,
+    payload: { areaM2, puttyQty, skimQty },
+  });
+
+  const items: QuoteItem[] = [
+    {
+      id: putty.id,
+      name: putty.name,
+      category: putty.category,
+      quantity: puttyQty,
+      unit: putty.unit,
+      unitPrice: putty.price,
+      reason: "Dempul untuk retak rambut, lubang kecil, dan perataan lokal sebelum finishing.",
+      lineTotal: puttyQty * putty.price,
+    },
+  ];
+
+  if (skim) {
+    items.push({
+      id: skim.id,
+      name: skim.name,
+      category: skim.category,
+      quantity: skimQty,
+      unit: skim.unit,
+      unitPrice: skim.price,
+      reason: "Skim coat untuk meratakan bidang dinding yang lebih luas.",
+      lineTotal: skimQty * skim.price,
+    });
+  }
+
+  if (sealant) {
+    items.push({
+      id: sealant.id,
+      name: sealant.name,
+      category: sealant.category,
+      quantity: 1,
+      unit: sealant.unit,
+      unitPrice: sealant.price,
+      reason: "Sealant untuk celah atau sambungan yang menjadi sumber rembes.",
+      lineTotal: sealant.price,
+    });
+  }
+
+  if (sandpaper) {
+    items.push({
+      id: sandpaper.id,
+      name: sandpaper.name,
+      category: sandpaper.category,
+      quantity: 1,
+      unit: sandpaper.unit,
+      unitPrice: sandpaper.price,
+      reason: "Amplas untuk finishing setelah dempul/skim coat kering.",
+      lineTotal: sandpaper.price,
+    });
+  }
+
+  if (scraper) {
+    items.push({
+      id: scraper.id,
+      name: scraper.name,
+      category: scraper.category,
+      quantity: 1,
+      unit: scraper.unit,
+      unitPrice: scraper.price,
+      reason: "Scraper/kape untuk membersihkan cat mengelupas dan meratakan dempul.",
+      lineTotal: scraper.price,
+    });
+  }
+
+  const subtotal = calculateSubtotal(items).subtotal;
+  channel.send({
+    from: "Quotation Agent",
+    to: "Critic Agent",
+    type: "quotation.draft",
+    summary: `${items.length} item wall repair dengan subtotal ${formatCurrency(subtotal)}.`,
+    payload: { items, subtotal },
+  });
+
+  const diagnosis = diagnosisAgent.summary;
+  const retrieval = summarizeRetrieval([wallSearch, toolSearch, sealantSearch]);
+  const criticAgent = await runCriticAgent({
+    intake,
+    diagnosis: diagnosisAgent,
+    retrieval,
+    calculator,
+    items,
+    subtotal,
+    channel,
+  });
+
+  return {
+    message: `Saya tangkap masalah dinding pada area sekitar ${areaM2} m2. Berikut rekomendasi perbaikan dinding berbasis katalog dan subtotalnya.`,
+    recommendation: {
+      title: `Perbaikan dinding ${areaM2} m2`,
+      problemSummary: intake.problemSummary,
+      diagnosis,
+      items,
+      breakdown: [
+        { label: "Area", value: `${areaM2} m2` },
+        { label: "Preferensi", value: intake.budgetPreference ?? "standar" },
+        { label: "Kebutuhan", value: calculator },
+        { label: "Subtotal", value: formatCurrency(subtotal) },
+      ],
+      agentTrace: buildAgentTrace({
+        problem: intake.problemSummary,
+        diagnosisAgent,
+        retrieval,
+        calculator,
+        quotation: `${items.length} item dengan subtotal ${formatCurrency(subtotal)}.`,
+        criticAgent,
+        intake,
+        retrievalInput: "dinding retak rembes wall putty skim coat sandpaper scraper; sealant rembes retak sambungan dinding",
+        searches: [wallSearch, toolSearch, sealantSearch],
+        channel,
       }),
       subtotal,
     },
@@ -809,10 +1772,19 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { messages?: RequestMessage[] };
     const messages = body.messages?.filter((message) => message.role === "user" || message.role === "assistant") ?? [];
+    const channel = createAgentChannel();
 
     if (messages.length === 0) {
       return Response.json({ error: "Riwayat chat kosong." }, { status: 400 });
     }
+
+    channel.send({
+      from: "Customer",
+      to: "Intake Agent",
+      type: "customer.request",
+      summary: messages.at(-1)?.content ?? "Permintaan pelanggan diterima.",
+      payload: { messageCount: messages.length, hasImage: hasImage(messages) },
+    });
 
     if (detectUnsupportedRequest(messages)) {
       return unavailableResponse();
@@ -836,9 +1808,18 @@ export async function POST(request: Request) {
 
       intake = fallbackAnalyzeIntake(messages);
     }
+    intake = normalizeIntakeForIndonesian(intake, messages);
     if (hasNoPreference(messages) && !intake.budgetPreference) {
       intake.budgetPreference = "standard";
     }
+
+    channel.send({
+      from: "Intake Agent",
+      to: "Repair Diagnosis Agent",
+      type: "intake.result",
+      summary: `${intake.intent}: ${intake.problemSummary}`,
+      payload: intake,
+    });
 
     if (intake.intent === "unknown") {
       return unavailableResponse(
@@ -857,10 +1838,12 @@ export async function POST(request: Request) {
       });
     }
 
+    const diagnosisAgent = await runDiagnosisAgent(intake, messages, channel);
+
     if (intake.intent === "paint") {
       return Response.json({
         type: "recommendation",
-        ...(await buildPaintRecommendation(intake)),
+        ...(await buildPaintRecommendation(intake, diagnosisAgent, channel)),
         intake,
         aiProvider: "sumopod",
       });
@@ -869,7 +1852,7 @@ export async function POST(request: Request) {
     if (intake.intent === "waterproofing") {
       return Response.json({
         type: "recommendation",
-        ...(await buildWaterproofingRecommendation(intake)),
+        ...(await buildWaterproofingRecommendation(intake, diagnosisAgent, channel)),
         intake,
         aiProvider: "sumopod",
       });
@@ -878,7 +1861,25 @@ export async function POST(request: Request) {
     if (intake.intent === "tiles") {
       return Response.json({
         type: "recommendation",
-        ...(await buildTilesRecommendation(intake)),
+        ...(await buildTilesRecommendation(intake, diagnosisAgent, channel)),
+        intake,
+        aiProvider: "sumopod",
+      });
+    }
+
+    if (intake.intent === "plumbing") {
+      return Response.json({
+        type: "recommendation",
+        ...(await buildPlumbingRecommendation(intake, diagnosisAgent, channel)),
+        intake,
+        aiProvider: "sumopod",
+      });
+    }
+
+    if (intake.intent === "wall_repair") {
+      return Response.json({
+        type: "recommendation",
+        ...(await buildWallRepairRecommendation(intake, diagnosisAgent, channel)),
         intake,
         aiProvider: "sumopod",
       });

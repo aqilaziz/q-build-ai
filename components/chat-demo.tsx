@@ -91,6 +91,17 @@ function AgentWorkflowTrace({ trace }: { trace: AgentTraceStep[] }) {
     (total, entry) => total + (entry.durationMs ?? 0),
     0,
   );
+  const communicationLog = trace.flatMap((entry) => {
+    const log = entry.metadata?.communicationLog;
+    return Array.isArray(log)
+      ? log.filter((item): item is {
+          from: string;
+          to: string;
+          type: string;
+          summary: string;
+        } => Boolean(item) && typeof item === "object")
+      : [];
+  });
 
   return (
     <section className="rounded-lg border border-[#d9ded2] bg-white p-4">
@@ -125,6 +136,27 @@ function AgentWorkflowTrace({ trace }: { trace: AgentTraceStep[] }) {
           <p className="mt-1 font-bold text-[#174832]">{totalDuration} ms</p>
         </div>
       </div>
+      {communicationLog.length > 0 ? (
+        <div className="mt-4 rounded-md border border-[#d9ded2] bg-[#fafbf8] p-3">
+          <p className="text-xs font-bold uppercase text-[#52645c]">
+            Agent message passing
+          </p>
+          <div className="mt-2 space-y-2">
+            {communicationLog.map((message, index) => (
+              <div
+                key={`${message.from}-${message.to}-${message.type}-${index}`}
+                className="rounded-md bg-white px-3 py-2 text-xs leading-5"
+              >
+                <p className="font-bold text-[#174832]">
+                  {message.from} {"->"} {message.to}
+                </p>
+                <p className="font-semibold text-[#52645c]">{message.type}</p>
+                <p>{message.summary}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <ol className="mt-4 space-y-3">
         {trace.map((entry, index) => (
           <li
@@ -173,6 +205,11 @@ function AgentWorkflowTrace({ trace }: { trace: AgentTraceStep[] }) {
                 {typeof entry.durationMs === "number" ? (
                   <span className="rounded-md border border-[#d9ded2] px-2 py-1">
                     {entry.durationMs} ms
+                  </span>
+                ) : null}
+                {Array.isArray(entry.metadata?.inbox) ? (
+                  <span className="rounded-md border border-[#d9ded2] px-2 py-1">
+                    Inbox {entry.metadata.inbox.length}
                   </span>
                 ) : null}
               </div>

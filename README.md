@@ -52,6 +52,8 @@ Core principles:
 
 The demo exposes a professional audit trail called **Agent Workflow Trace** in the chat workspace and in saved quotation detail/PDF output. `Recommendation` and `SavedQuote` can carry an optional `agentTrace`, so API-backed quotes and local fallback quotes can use the same UI without breaking older records.
 
+The detailed handoff contract is documented in [docs/agent-architecture.md](docs/agent-architecture.md). The current runtime uses an explicit `AgentChannel` inbox/outbox so each agent exchanges typed messages such as `intake.result`, `diagnosis.result`, `retrieval.result`, `quantity.result`, `quotation.draft`, and `critic.result`. Intake, Repair Diagnosis, and Critic use separate structured model calls; retrieval, calculation, quotation composition, and audit persistence are independent tool-backed stages with deterministic fallbacks.
+
 | Trace step | Demo agent | Responsibility |
 | --- | --- | --- |
 | Problem Intake | Intake Agent | Normalizes the customer problem, area, and optional photo context. |
