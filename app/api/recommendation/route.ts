@@ -578,6 +578,29 @@ function isArithmeticIssue(issue: string) {
   return /subtotal|total|line item|line total|kalkulasi|hitung|perhitungan/i.test(issue);
 }
 
+function hasMoistureOrJointContext(text: string) {
+  return /\b(rembes|bocor|lembap|lembab|noda air|air masuk|celah|sambungan|retak aktif)\b/i.test(
+    text,
+  );
+}
+
+function isAllowedSupportingItemIssue(issue: string, intake: Intake, items: QuoteItem[]) {
+  if (intake.intent !== "wall_repair") return false;
+
+  const context = `${intake.problemSummary} ${intake.location ?? ""} ${intake.qualityPreference ?? ""}`;
+  if (!hasMoistureOrJointContext(context)) return false;
+
+  return items.some((item) => {
+    const issueMentionsItem =
+      issue.toLowerCase().includes(item.name.toLowerCase()) ||
+      (/sealant|waterproofing/i.test(issue) && /sealant/i.test(item.name));
+    const itemIsSealant = /sealant/i.test(`${item.name} ${item.reason}`);
+    const reasonFitsWallRepair = hasMoistureOrJointContext(item.reason);
+
+    return issueMentionsItem && itemIsSealant && reasonFitsWallRepair;
+  });
+}
+
 async function runCriticAgent({
   intake,
   diagnosis,
@@ -643,6 +666,7 @@ async function runCriticAgent({
         system: `Anda adalah Critic Agent untuk sistem multi-agent bahan bangunan.
 Periksa apakah rekomendasi sudah grounded pada item yang tersedia, quantity masuk akal, kalkulasi dipakai, dan subtotal konsisten.
 Audit deterministik pada input adalah sumber kebenaran untuk aritmetika subtotal; jangan melaporkan isu subtotal jika deterministicAudit.subtotalConsistent bernilai true.
+Untuk intent wall_repair, sealant adalah item pendukung yang valid jika problem menyebut rembes, bocor, lembap, celah, atau sambungan. Jangan reject hanya karena kategori katalog sealant adalah waterproofing.
 Jangan menambah produk baru. Jika ada isu, jelaskan singkat.`,
         messages: [
           {
@@ -653,7 +677,9 @@ Jangan menambah produk baru. Jika ada isu, jelaskan singkat.`,
       });
 
       const llmIssues = object.issues.filter(
-        (issue) => !(subtotalConsistent && isArithmeticIssue(issue)),
+        (issue) =>
+          !(subtotalConsistent && isArithmeticIssue(issue)) &&
+          !isAllowedSupportingItemIssue(issue, intake, items),
       );
       const issues = [...new Set([...deterministicAudit.issues, ...llmIssues])];
       const passed = issues.length === 0;
@@ -1571,7 +1597,12 @@ async function buildWallRepairRecommendation(
   const skim = wallSearch.products.find((product) => /skim/i.test(product.name));
   const sandpaper = wallSearch.products.find((product) => /sandpaper|amplas/i.test(product.name));
   const scraper = toolSearch.products.find((product) => /scraper|kape/i.test(product.name));
-  const sealant = sealantSearch.products.find((product) => /sealant/i.test(product.name));
+  const needsSealant = hasMoistureOrJointContext(
+    `${intake.problemSummary} ${diagnosisAgent.summary}`,
+  );
+  const sealant = needsSealant
+    ? sealantSearch.products.find((product) => /sealant/i.test(product.name))
+    : undefined;
 
   if (!putty) throw new Error("Produk perbaikan dinding tidak ditemukan di katalog.");
 
