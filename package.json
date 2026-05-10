@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "test:e2e": "playwright test",
+    "eval:agents": "node scripts/evaluate-agents.mjs",
     "lint": "eslint",
     "supabase:verify": "node scripts/verify-supabase.mjs",
     "seed:products": "node scripts/seed-products.mjs",

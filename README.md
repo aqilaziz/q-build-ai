@@ -17,6 +17,7 @@ Submission assets:
 - [Agent architecture](docs/agent-architecture.md)
 - [5-minute demo script](docs/submission-demo-script.md)
 - [Production checklist](docs/production-checklist.md)
+- [Agent evaluation](docs/agent-evaluation.md)
 - [Vercel deployment guide](docs/vercel-deployment.md)
 - [Manual QA checklist](docs/qa-manual-acceptance.md)
 
@@ -158,6 +159,13 @@ Run checks:
 ```powershell
 npm run lint
 npm run build
+npm run test:e2e
+```
+
+For the live deployment:
+
+```powershell
+$env:EVAL_BASE_URL="https://qbuilt-ai.vercel.app"; npm run eval:agents
 ```
 
 ## Environment Variables

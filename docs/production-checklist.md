@@ -33,6 +33,7 @@ Use this before submitting the GitHub repo and demo video.
 - [ ] Dinding rembes/retak 10 m2 returns wall repair recommendation.
 - [ ] Missing area asks one focused clarification.
 - [ ] Unsupported product request does not invent catalog items.
+- [ ] `$env:EVAL_BASE_URL="https://qbuilt-ai.vercel.app"; npm run eval:agents` passes.
 
 ## Agent Evidence
 
@@ -45,5 +46,6 @@ Use this before submitting the GitHub repo and demo video.
 
 - [ ] README has the production URL.
 - [ ] README maps the implementation to judging criteria.
+- [ ] `docs/agent-evaluation.md` latest run is filled in.
 - [ ] Demo video follows `docs/submission-demo-script.md`.
 - [ ] GitHub branch is pushed and public/reviewer-accessible.
