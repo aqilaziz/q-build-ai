@@ -13,6 +13,7 @@ import {
   ShoppingCart,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { AgentTraceField } from "@/components/agent-trace-field";
 import {
   AgentTraceStep,
   formatCurrency,
@@ -104,12 +105,9 @@ function AgentWorkflowTraceSummary({ trace }: { trace: AgentTraceStep[] }) {
               {entry.summary}
             </p>
             {entry.decision ? (
-              <p className="mt-2 min-w-0 break-words text-xs leading-5 [overflow-wrap:anywhere]">
-                <span className="font-bold uppercase text-[#52645c]">
-                  Decision:
-                </span>{" "}
-                {entry.decision}
-              </p>
+              <div className="mt-2 text-xs">
+                <AgentTraceField label="Decision" value={entry.decision} agent={entry.agent} />
+              </div>
             ) : null}
             <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-[#52645c]">
               {typeof entry.confidence === "number" ? (

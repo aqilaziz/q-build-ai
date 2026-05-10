@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { FormEvent, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { AgentTraceField } from "@/components/agent-trace-field";
 import {
   AgentTraceStep,
   formatCurrency,
@@ -199,22 +200,13 @@ function AgentWorkflowTrace({ trace }: { trace: AgentTraceStep[] }) {
               </p>
               <div className="mt-2 grid gap-2 text-xs md:grid-cols-3">
                 {entry.input ? (
-                  <div className="min-w-0 rounded-md bg-[#fafbf8] p-2">
-                    <p className="font-bold uppercase text-[#52645c]">Input</p>
-                    <TraceText>{entry.input}</TraceText>
-                  </div>
+                  <AgentTraceField label="Input" value={entry.input} agent={entry.agent} />
                 ) : null}
                 {entry.output ? (
-                  <div className="min-w-0 rounded-md bg-[#fafbf8] p-2">
-                    <p className="font-bold uppercase text-[#52645c]">Output</p>
-                    <TraceText>{entry.output}</TraceText>
-                  </div>
+                  <AgentTraceField label="Output" value={entry.output} agent={entry.agent} />
                 ) : null}
                 {entry.decision ? (
-                  <div className="min-w-0 rounded-md bg-[#fafbf8] p-2">
-                    <p className="font-bold uppercase text-[#52645c]">Decision</p>
-                    <TraceText>{entry.decision}</TraceText>
-                  </div>
+                  <AgentTraceField label="Decision" value={entry.decision} agent={entry.agent} />
                 ) : null}
               </div>
               <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-[#52645c]">
