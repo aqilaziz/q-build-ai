@@ -279,6 +279,7 @@ export function ChatDemo() {
     setIsLoading(true);
     setStreamingText("");
     setRecommendation(null);
+    setInput("");
 
     const userContent = prompt || "Saya unggah foto masalah rumah.";
     let imageDataUrl: string | undefined;
@@ -328,7 +329,6 @@ export function ChatDemo() {
       setRecommendation(
         payload.type === "recommendation" ? payload.recommendation : null,
       );
-      setInput("");
       setAttachedImage(null);
       if (imageInputRef.current) {
         imageInputRef.current.value = "";
