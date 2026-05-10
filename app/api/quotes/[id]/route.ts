@@ -74,6 +74,15 @@ function toAgentTrace(quotation: DbQuotation) {
     step: step.role ?? step.decision ?? "Agent Step",
     agent: step.agent_name ?? "Agent",
     summary: step.output ?? step.decision ?? "Langkah agent selesai.",
+    input: step.input,
+    output: step.output,
+    decision: step.decision,
+    confidence: step.confidence === null ? null : Number(step.confidence),
+    durationMs:
+      typeof step.metadata?.durationMs === "number"
+        ? step.metadata.durationMs
+        : null,
+    metadata: step.metadata,
   }));
 }
 

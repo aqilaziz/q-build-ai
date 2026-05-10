@@ -20,6 +20,12 @@ export type AgentTraceStep = {
   step: string;
   agent: string;
   summary: string;
+  input?: string | null;
+  output?: string | null;
+  decision?: string | null;
+  confidence?: number | null;
+  durationMs?: number | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 export type SavedQuote = {
@@ -171,9 +177,28 @@ function normalizeAgentTrace(value: unknown): AgentTraceStep[] | undefined {
         step: stepName,
         agent,
         summary,
+        input: typeof step.input === "string" ? step.input : null,
+        output: typeof step.output === "string" ? step.output : null,
+        decision: typeof step.decision === "string" ? step.decision : null,
+        confidence:
+          typeof step.confidence === "number"
+            ? step.confidence
+            : typeof step.confidence === "string"
+              ? Number(step.confidence)
+              : null,
+        durationMs:
+          typeof step.durationMs === "number"
+            ? step.durationMs
+            : typeof step.duration_ms === "number"
+              ? step.duration_ms
+              : null,
+        metadata:
+          step.metadata && typeof step.metadata === "object"
+            ? (step.metadata as Record<string, unknown>)
+            : null,
       };
     })
-    .filter((entry): entry is AgentTraceStep => entry !== null);
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
   return trace.length > 0 ? trace : undefined;
 }
@@ -197,11 +222,15 @@ function toApiAgentTrace(trace: AgentTraceStep[] | undefined) {
     steps: trace.map((entry) => ({
       agentName: entry.agent,
       role: entry.step,
-      input: entry.step,
-      output: entry.summary,
-      decision: entry.step,
-      confidence: null,
-      metadata: { step: entry.step },
+      input: entry.input ?? entry.step,
+      output: entry.output ?? entry.summary,
+      decision: entry.decision ?? entry.step,
+      confidence: entry.confidence ?? null,
+      metadata: {
+        step: entry.step,
+        durationMs: entry.durationMs ?? null,
+        ...(entry.metadata ?? {}),
+      },
     })),
     metadata: { source: "q-build-ai-demo" },
   };

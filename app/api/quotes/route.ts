@@ -16,6 +16,12 @@ type UiAgentTraceStep = {
   step?: string | null;
   agent?: string | null;
   summary?: string | null;
+  input?: string | null;
+  output?: string | null;
+  decision?: string | null;
+  confidence?: number | null;
+  durationMs?: number | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 type UiQuoteInput = {
@@ -108,6 +114,15 @@ function toAgentTrace(quotation: DbQuotation) {
     step: step.role ?? step.decision ?? "Agent Step",
     agent: step.agent_name ?? "Agent",
     summary: step.output ?? step.decision ?? "Langkah agent selesai.",
+    input: step.input,
+    output: step.output,
+    decision: step.decision,
+    confidence: step.confidence === null ? null : Number(step.confidence),
+    durationMs:
+      typeof step.metadata?.durationMs === "number"
+        ? step.metadata.durationMs
+        : null,
+    metadata: step.metadata,
   }));
 }
 
@@ -156,10 +171,15 @@ function normalizeAgentTrace(body: UiQuoteInput): AgentTraceInput | null {
       steps: trace.map((entry) => ({
         agentName: entry.agent ?? "Agent",
         role: entry.step ?? "Agent Step",
-        input: body.problemSummary ?? body.summary ?? null,
-        output: entry.summary ?? "Langkah agent selesai.",
-        decision: entry.step ?? null,
-        metadata: { uiStep: entry.step ?? null },
+        input: entry.input ?? body.problemSummary ?? body.summary ?? null,
+        output: entry.output ?? entry.summary ?? "Langkah agent selesai.",
+        decision: entry.decision ?? entry.step ?? null,
+        confidence: entry.confidence ?? null,
+        metadata: {
+          uiStep: entry.step ?? null,
+          durationMs: entry.durationMs ?? null,
+          ...(entry.metadata ?? {}),
+        },
       })),
     };
   }

@@ -21,15 +21,38 @@ import {
 } from "@/components/quote-data";
 
 function AgentWorkflowTraceSummary({ trace }: { trace: AgentTraceStep[] }) {
+  const totalDuration = trace.reduce(
+    (total, entry) => total + (entry.durationMs ?? 0),
+    0,
+  );
+
   return (
     <section className="rounded-lg border border-[#d9ded2] bg-white p-4">
       <div className="flex items-center gap-2">
         <ListChecks className="text-[#174832]" size={18} />
         <h2 className="font-bold">Agent Workflow Trace</h2>
       </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <div className="rounded-md bg-[#edf5ee] p-3">
+          <p className="text-xs font-semibold uppercase text-[#52645c]">Agent</p>
+          <p className="mt-1 font-bold text-[#174832]">{trace.length}</p>
+        </div>
+        <div className="rounded-md bg-[#edf5ee] p-3">
+          <p className="text-xs font-semibold uppercase text-[#52645c]">Handoff</p>
+          <p className="mt-1 font-bold text-[#174832]">
+            {Math.max(trace.length - 1, 0)}
+          </p>
+        </div>
+        <div className="rounded-md bg-[#edf5ee] p-3">
+          <p className="text-xs font-semibold uppercase text-[#52645c]">
+            Agent time
+          </p>
+          <p className="mt-1 font-bold text-[#174832]">{totalDuration} ms</p>
+        </div>
+      </div>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         {trace.map((entry, index) => (
-          <div key={entry.step} className="rounded-md bg-[#fafbf8] p-3">
+          <div key={`${entry.step}-${index}`} className="rounded-md bg-[#fafbf8] p-3">
             <p className="text-xs font-semibold uppercase text-[#52645c]">
               {index + 1}. {entry.step}
             </p>
@@ -37,6 +60,26 @@ function AgentWorkflowTraceSummary({ trace }: { trace: AgentTraceStep[] }) {
             <p className="mt-1 text-sm leading-5 text-[#52645c]">
               {entry.summary}
             </p>
+            {entry.decision ? (
+              <p className="mt-2 text-xs leading-5">
+                <span className="font-bold uppercase text-[#52645c]">
+                  Decision:
+                </span>{" "}
+                {entry.decision}
+              </p>
+            ) : null}
+            <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-[#52645c]">
+              {typeof entry.confidence === "number" ? (
+                <span className="rounded-md border border-[#d9ded2] px-2 py-1">
+                  Confidence {Math.round(entry.confidence * 100)}%
+                </span>
+              ) : null}
+              {typeof entry.durationMs === "number" ? (
+                <span className="rounded-md border border-[#d9ded2] px-2 py-1">
+                  {entry.durationMs} ms
+                </span>
+              ) : null}
+            </div>
           </div>
         ))}
       </div>
