@@ -5,6 +5,8 @@ import { createClient, type Session } from "@supabase/supabase-js";
 import {
   ArrowLeft,
   Check,
+  Eye,
+  EyeOff,
   ImagePlus,
   Layers3,
   Loader2,
@@ -145,6 +147,7 @@ export function AdminDashboard() {
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("admin@gmail.com");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [data, setData] = useState<CatalogData | null>(null);
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
@@ -377,12 +380,23 @@ export function AdminDashboard() {
               </label>
               <label className="block text-sm font-semibold">
                 Password
-                <input
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  type="password"
-                  className="mt-1 w-full rounded-md border border-[#cbd3c4] px-3 py-3 text-sm outline-none focus:border-[#174832]"
-                />
+                <span className="mt-1 flex rounded-md border border-[#cbd3c4] bg-white focus-within:border-[#174832]">
+                  <input
+                    id="admin-password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    type={showPassword ? "text" : "password"}
+                    className="min-w-0 flex-1 rounded-l-md px-3 py-3 text-sm outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((current) => !current)}
+                    className="inline-flex w-11 items-center justify-center rounded-r-md text-[#52645c]"
+                    aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </span>
               </label>
               {error ? (
                 <p className="rounded-md border border-[#efb8a8] bg-[#fff4ef] px-3 py-2 text-sm text-[#8a321d]">

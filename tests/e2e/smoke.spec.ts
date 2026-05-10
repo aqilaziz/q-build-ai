@@ -190,7 +190,12 @@ test.describe("smoke pages", () => {
       page.getByRole("heading", { name: "Masuk sebagai admin" }),
     ).toBeVisible();
     await expect(page.getByLabel("Email")).toHaveValue("admin@gmail.com");
-    await expect(page.getByLabel("Password")).toBeVisible();
+    const passwordInput = page.locator("#admin-password");
+    await expect(passwordInput).toBeVisible();
+    await expect(page.getByLabel("Tampilkan password")).toBeVisible();
+    await expect(passwordInput).toHaveAttribute("type", "password");
+    await page.getByLabel("Tampilkan password").click();
+    await expect(passwordInput).toHaveAttribute("type", "text");
     await expect(page.getByRole("button", { name: "Masuk" })).toBeVisible();
   });
 
