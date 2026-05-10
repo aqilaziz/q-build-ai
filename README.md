@@ -199,6 +199,50 @@ Variable usage:
 - `SUPABASE_SERVICE_ROLE_KEY`: server-only key for privileged seed/embedding jobs. Never expose this in client components.
 - `ADMIN_EMAILS`: comma-separated Supabase Auth emails that can access `/admin`.
 
+## Competition Judging Criteria Mapping
+
+| Criterion | Implementation | Evidence |
+| --- | --- | --- |
+| **Kualitas Reasoning Agent** | 7-stage explicit multi-agent workflow with AgentChannel inbox/outbox, typed message contracts, and deterministic fallbacks | [docs/agent-architecture.md](docs/agent-architecture.md); [lib/ai/agent-communication.ts](lib/ai/agent-communication.ts) |
+| **Kolaborasi Antar Agent** | Intake → Diagnosis → RAG → Calculator → Quotation → Critic → Audit with clear handoff types (`intake.result`, `diagnosis.result`, etc.) | **Agent Workflow Trace** visible in UI; [app/api/recommendation](app/api) endpoint |
+| **Dampak ke Dunia Nyata** | Solves QHomemart customer triage: diagnose problem → recommend grounded products → calculate material → save quotation | 4 production scenarios: roof leak (15m2), plumbing, paint, wall repair |
+| **Kejelasan Arsitektur** | Comprehensive docs with spec, plan, architecture diagram, deployment guide, and QA checklists | [specs/001-q-build-ai-agent/](specs/001-q-build-ai-agent/); [docs/](docs/) |
+| **Reproducibility** | Single `npm ci && npm run dev` command, seed-products script, Supabase migrations, E2E tests, and Vercel deployment | [docs/vercel-deployment.md](docs/vercel-deployment.md); `.github/workflows/` CI/CD |
+
+## Demo & Submission
+
+**Production URL**: https://qbuilt-hcak3yfxb-aqilazizs-projects.vercel.app
+
+**Demo Asset Checklist**:
+
+- [x] Agent architecture documented
+- [x] 5-minute submission demo script
+- [x] Production deployment guide
+- [x] Manual QA acceptance checklist
+- [x] README with criteria mapping
+- [ ] Demo video (to be recorded)
+- [ ] GitHub repo pushed (01-q-build-ai-agent branch)
+
+**QA Acceptance Scenarios**:
+
+1. **Atap bocor 15 m2**: Waterproofing diagnosis → 30 kg recommendation → Rp 300K+ subtotal
+2. **Pipa bocor 0.5 m**: Plumbing diagnosis → tools + seals → estimated cost
+3. **Cat dinding 12 m2**: Paint diagnosis → coverage calculation → quotation
+4. **Dinding retak 10 m2**: Wall repair diagnosis → putty/skim coat → shopping list
+
+**Production Checklist** (docs/production-checklist.md):
+
+- [ ] Production URL opens on desktop and mobile
+- [ ] Agent Workflow Trace visible in chat
+- [ ] All 4 demo scenarios return appropriate recommendations
+- [ ] Quotation save and history working
+- [ ] PDF export functional
+- [ ] Admin catalog management accessible (with auth)
+
+---
+
+
+
 Optional provider key if Gemini is used later:
 
 ```env
