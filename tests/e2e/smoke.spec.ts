@@ -234,14 +234,33 @@ test.describe("smoke pages", () => {
               is_active: true,
             },
           ],
-          labels: [],
+          labels: [
+            {
+              id: "label-premium",
+              slug: "premium",
+              name: "Premium",
+              color: "#b45309",
+              is_active: true,
+            },
+          ],
         }),
       });
     });
     await page.reload();
-    const priceInput = page.getByLabel("Harga");
+    await page.getByRole("button", { name: /^Produk \d+/ }).click();
+    const priceInput = page.locator('input[placeholder="250.000"]:visible');
+    await expect(priceInput).toBeVisible();
     await priceInput.fill("2500000");
     await expect(priceInput).toHaveValue("2.500.000");
+
+    await page.getByRole("button", { name: /^Kategori \d+/ }).click();
+    await expect(page.getByRole("heading", { name: "Kelola kategori produk" })).toBeVisible();
+    await expect(page.locator("p", { hasText: /^Paint$/ })).toBeVisible();
+    await expect(page.locator('input[placeholder="250.000"]:visible')).toHaveCount(0);
+
+    await page.getByRole("button", { name: /^Label \d+/ }).click();
+    await expect(page.getByRole("heading", { name: "Kelola label produk" })).toBeVisible();
+    await expect(page.locator("p", { hasText: /^Premium$/ })).toBeVisible();
   });
 
   test("quote detail can export a professional PDF layout", async ({ page }) => {

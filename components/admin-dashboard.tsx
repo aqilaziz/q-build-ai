@@ -79,6 +79,8 @@ type ProductForm = {
   label_ids: string[];
 };
 
+type AdminSection = "products" | "categories" | "labels";
+
 const emptyProductForm: ProductForm = {
   id: "",
   name: "",
@@ -160,6 +162,7 @@ export function AdminDashboard() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [data, setData] = useState<CatalogData | null>(null);
+  const [activeSection, setActiveSection] = useState<AdminSection>("products");
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -468,22 +471,59 @@ export function AdminDashboard() {
           </section>
         ) : null}
 
-        <section className="mt-4 grid gap-3 md:grid-cols-3">
-          <div className="rounded-lg border border-[#d9ded2] bg-white p-4">
-            <p className="text-xs font-semibold uppercase text-[#52645c]">Produk</p>
-            <p className="mt-2 text-2xl font-bold">{data?.products.length ?? 0}</p>
-          </div>
-          <div className="rounded-lg border border-[#d9ded2] bg-white p-4">
-            <p className="text-xs font-semibold uppercase text-[#52645c]">Kategori</p>
-            <p className="mt-2 text-2xl font-bold">{data?.categories.length ?? 0}</p>
-          </div>
-          <div className="rounded-lg border border-[#d9ded2] bg-white p-4">
-            <p className="text-xs font-semibold uppercase text-[#52645c]">Label</p>
-            <p className="mt-2 text-2xl font-bold">{data?.labels.length ?? 0}</p>
-          </div>
-        </section>
+        <div className="mt-4 grid gap-4 lg:grid-cols-[220px_1fr]">
+          <aside className="rounded-lg border border-[#d9ded2] bg-white p-2 lg:sticky lg:top-4 lg:self-start">
+            {[
+              {
+                id: "products" as const,
+                label: "Produk",
+                count: data?.products.length ?? 0,
+                icon: Package,
+              },
+              {
+                id: "categories" as const,
+                label: "Kategori",
+                count: data?.categories.length ?? 0,
+                icon: Layers3,
+              },
+              {
+                id: "labels" as const,
+                label: "Label",
+                count: data?.labels.length ?? 0,
+                icon: Tag,
+              },
+            ].map((item) => {
+              const Icon = item.icon;
+              const active = activeSection === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveSection(item.id)}
+                  className={`flex w-full items-center justify-between gap-3 rounded-md px-3 py-3 text-left text-sm font-bold ${
+                    active
+                      ? "bg-[#174832] text-white"
+                      : "text-[#26342b] hover:bg-[#edf5ee]"
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Icon size={17} />
+                    {item.label}
+                  </span>
+                  <span
+                    className={`rounded-md px-2 py-1 text-xs ${
+                      active ? "bg-white/15" : "bg-[#edf5ee] text-[#174832]"
+                    }`}
+                  >
+                    {item.count}
+                  </span>
+                </button>
+              );
+            })}
+          </aside>
 
-        <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_420px]">
+          <section className="min-w-0">
+        <div className={activeSection === "products" ? "grid gap-4 xl:grid-cols-[1fr_420px]" : "hidden"}>
           <section className="min-w-0">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <label className="flex min-h-11 flex-1 items-center gap-2 rounded-lg border border-[#cbd3c4] bg-white px-3">
@@ -750,7 +790,7 @@ export function AdminDashboard() {
               </form>
             </section>
 
-            <section className="rounded-lg border border-[#d9ded2] bg-white p-4">
+            <section className="hidden">
               <div className="flex items-center gap-2">
                 <Layers3 size={18} className="text-[#174832]" />
                 <h2 className="font-bold">Kategori</h2>
@@ -820,7 +860,7 @@ export function AdminDashboard() {
               </ListRows>
             </section>
 
-            <section className="rounded-lg border border-[#d9ded2] bg-white p-4">
+            <section className="hidden">
               <div className="flex items-center gap-2">
                 <Tag size={18} className="text-[#174832]" />
                 <h2 className="font-bold">Label</h2>
@@ -895,6 +935,263 @@ export function AdminDashboard() {
               </ListRows>
             </section>
           </aside>
+        </div>
+        {activeSection === "categories" ? (
+          <section className="rounded-lg border border-[#d9ded2] bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Layers3 size={18} className="text-[#174832]" />
+                <div>
+                  <p className="text-xs font-semibold uppercase text-[#52645c]">
+                    Kategori
+                  </p>
+                  <h2 className="font-bold">Kelola kategori produk</h2>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setCategoryForm({
+                    id: "",
+                    name: "",
+                    slug: "",
+                    description: "",
+                    sort_order: "100",
+                    is_active: true,
+                  })
+                }
+                className="inline-flex items-center gap-2 rounded-md bg-[#174832] px-3 py-2 text-sm font-bold text-white"
+              >
+                <Plus size={15} />
+                Kategori baru
+              </button>
+            </div>
+            <div className="mt-4 grid gap-4 xl:grid-cols-[360px_1fr]">
+              <form className="grid gap-3 rounded-lg border border-[#edf0e8] bg-[#fafbf8] p-4" onSubmit={saveCategory}>
+                <Field label="Nama kategori">
+                  <input
+                    value={categoryForm.name}
+                    onChange={(event) =>
+                      setCategoryForm({
+                        ...categoryForm,
+                        name: event.target.value,
+                        slug: categoryForm.slug || slugify(event.target.value),
+                      })
+                    }
+                    placeholder="Nama kategori"
+                    className="admin-input"
+                  />
+                </Field>
+                <div className="grid grid-cols-[1fr_90px] gap-2">
+                  <Field label="Slug">
+                    <input
+                      value={categoryForm.slug}
+                      onChange={(event) =>
+                        setCategoryForm({ ...categoryForm, slug: slugify(event.target.value) })
+                      }
+                      placeholder="slug"
+                      className="admin-input"
+                    />
+                  </Field>
+                  <Field label="Urutan">
+                    <input
+                      value={categoryForm.sort_order}
+                      onChange={(event) =>
+                        setCategoryForm({ ...categoryForm, sort_order: event.target.value })
+                      }
+                      type="number"
+                      className="admin-input"
+                    />
+                  </Field>
+                </div>
+                <Field label="Deskripsi">
+                  <textarea
+                    value={categoryForm.description}
+                    onChange={(event) =>
+                      setCategoryForm({ ...categoryForm, description: event.target.value })
+                    }
+                    rows={3}
+                    className="admin-input"
+                  />
+                </Field>
+                <button className="inline-flex items-center justify-center gap-2 rounded-md bg-[#174832] px-3 py-3 text-sm font-bold text-white">
+                  <Save size={15} />
+                  Simpan kategori
+                </button>
+              </form>
+
+              <div className="overflow-hidden rounded-lg border border-[#d9ded2]">
+                <div className="grid grid-cols-[1fr_120px_90px] gap-3 border-b border-[#d9ded2] bg-[#edf5ee] px-3 py-2 text-xs font-bold uppercase text-[#52645c]">
+                  <span>Kategori</span>
+                  <span>Urutan</span>
+                  <span>Aksi</span>
+                </div>
+                <div className="divide-y divide-[#e5e9df]">
+                  {data?.categories.map((category) => (
+                    <div key={category.id} className="grid grid-cols-[1fr_120px_90px] items-center gap-3 px-3 py-3 text-sm">
+                      <div>
+                        <p className="font-bold">{category.name}</p>
+                        <p className="mt-1 text-xs text-[#52645c]">{category.slug}</p>
+                      </div>
+                      <span>{category.sort_order}</span>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() =>
+                            setCategoryForm({
+                              id: category.id,
+                              name: category.name,
+                              slug: category.slug,
+                              description: category.description ?? "",
+                              sort_order: String(category.sort_order),
+                              is_active: category.is_active,
+                            })
+                          }
+                          className="row-action"
+                          aria-label="Edit kategori"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => void deleteCategory(category)}
+                          className="row-action-danger"
+                          aria-label="Hapus kategori"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === "labels" ? (
+          <section className="rounded-lg border border-[#d9ded2] bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Tag size={18} className="text-[#174832]" />
+                <div>
+                  <p className="text-xs font-semibold uppercase text-[#52645c]">
+                    Label
+                  </p>
+                  <h2 className="font-bold">Kelola label produk</h2>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setLabelForm({
+                    id: "",
+                    name: "",
+                    slug: "",
+                    color: "#174832",
+                    is_active: true,
+                  })
+                }
+                className="inline-flex items-center gap-2 rounded-md bg-[#174832] px-3 py-2 text-sm font-bold text-white"
+              >
+                <Plus size={15} />
+                Label baru
+              </button>
+            </div>
+            <div className="mt-4 grid gap-4 xl:grid-cols-[360px_1fr]">
+              <form className="grid gap-3 rounded-lg border border-[#edf0e8] bg-[#fafbf8] p-4" onSubmit={saveLabel}>
+                <Field label="Nama label">
+                  <input
+                    value={labelForm.name}
+                    onChange={(event) =>
+                      setLabelForm({
+                        ...labelForm,
+                        name: event.target.value,
+                        slug: labelForm.slug || slugify(event.target.value),
+                      })
+                    }
+                    placeholder="Nama label"
+                    className="admin-input"
+                  />
+                </Field>
+                <div className="grid grid-cols-[1fr_70px] gap-2">
+                  <Field label="Slug">
+                    <input
+                      value={labelForm.slug}
+                      onChange={(event) =>
+                        setLabelForm({ ...labelForm, slug: slugify(event.target.value) })
+                      }
+                      placeholder="slug"
+                      className="admin-input"
+                    />
+                  </Field>
+                  <Field label="Warna">
+                    <input
+                      value={labelForm.color}
+                      onChange={(event) =>
+                        setLabelForm({ ...labelForm, color: event.target.value })
+                      }
+                      type="color"
+                      className="h-10 w-full rounded-md border border-[#cbd3c4] bg-white p-1"
+                    />
+                  </Field>
+                </div>
+                <button className="inline-flex items-center justify-center gap-2 rounded-md bg-[#174832] px-3 py-3 text-sm font-bold text-white">
+                  <Save size={15} />
+                  Simpan label
+                </button>
+              </form>
+
+              <div className="overflow-hidden rounded-lg border border-[#d9ded2]">
+                <div className="grid grid-cols-[1fr_120px_90px] gap-3 border-b border-[#d9ded2] bg-[#edf5ee] px-3 py-2 text-xs font-bold uppercase text-[#52645c]">
+                  <span>Label</span>
+                  <span>Warna</span>
+                  <span>Aksi</span>
+                </div>
+                <div className="divide-y divide-[#e5e9df]">
+                  {data?.labels.map((label) => (
+                    <div key={label.id} className="grid grid-cols-[1fr_120px_90px] items-center gap-3 px-3 py-3 text-sm">
+                      <div>
+                        <p className="font-bold">{label.name}</p>
+                        <p className="mt-1 text-xs text-[#52645c]">{label.slug}</p>
+                      </div>
+                      <span className="inline-flex items-center gap-2">
+                        <span
+                          className="size-3 rounded-sm"
+                          style={{ backgroundColor: label.color }}
+                        />
+                        {label.color}
+                      </span>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() =>
+                            setLabelForm({
+                              id: label.id,
+                              name: label.name,
+                              slug: label.slug,
+                              color: label.color,
+                              is_active: label.is_active,
+                            })
+                          }
+                          className="row-action"
+                          aria-label="Edit label"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => void deleteLabel(label)}
+                          className="row-action-danger"
+                          aria-label="Hapus label"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : null}
+          </section>
         </div>
       </div>
     </main>
