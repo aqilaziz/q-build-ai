@@ -130,11 +130,22 @@ function productToForm(product: Product): ProductForm {
   };
 }
 
+function digitsOnly(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function formatNumberInput(value: string) {
+  const digits = digitsOnly(value);
+  return digits ? Number(digits).toLocaleString("id-ID") : "";
+}
+
 function appendProductForm(formData: FormData, form: ProductForm, imageFile: File | null) {
   formData.set("action", "upsertProduct");
   for (const [key, value] of Object.entries(form)) {
     if (key === "label_ids") {
       formData.set(key, form.label_ids.join(","));
+    } else if (key === "price") {
+      formData.set(key, digitsOnly(String(value)));
     } else {
       formData.set(key, String(value));
     }
@@ -634,12 +645,15 @@ export function AdminDashboard() {
                   </Field>
                   <Field label="Harga">
                     <input
-                      value={productForm.price}
+                      value={formatNumberInput(productForm.price)}
                       onChange={(event) =>
-                        setProductForm({ ...productForm, price: event.target.value })
+                        setProductForm({
+                          ...productForm,
+                          price: digitsOnly(event.target.value),
+                        })
                       }
-                      type="number"
-                      min="0"
+                      inputMode="numeric"
+                      placeholder="250.000"
                       required
                       className="admin-input"
                     />

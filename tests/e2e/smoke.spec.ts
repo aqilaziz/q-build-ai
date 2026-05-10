@@ -197,6 +197,51 @@ test.describe("smoke pages", () => {
     await page.getByLabel("Tampilkan password").click();
     await expect(passwordInput).toHaveAttribute("type", "text");
     await expect(page.getByRole("button", { name: "Masuk" })).toBeVisible();
+
+    await page.evaluate(() => {
+      window.localStorage.setItem(
+        "sb-ksemrhvevevyjxgdsznw-auth-token",
+        JSON.stringify({
+          access_token: "mock-token",
+          token_type: "bearer",
+          expires_in: 3600,
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+          refresh_token: "mock-refresh",
+          user: {
+            id: "mock-admin",
+            aud: "authenticated",
+            role: "authenticated",
+            email: "admin@gmail.com",
+            app_metadata: {},
+            user_metadata: {},
+          },
+        }),
+      );
+    });
+    await page.route("**/api/admin/catalog", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          products: [],
+          categories: [
+            {
+              id: "cat-paint",
+              slug: "paint",
+              name: "Paint",
+              description: null,
+              sort_order: 10,
+              is_active: true,
+            },
+          ],
+          labels: [],
+        }),
+      });
+    });
+    await page.reload();
+    const priceInput = page.getByLabel("Harga");
+    await priceInput.fill("2500000");
+    await expect(priceInput).toHaveValue("2.500.000");
   });
 
   test("quote detail can export a professional PDF layout", async ({ page }) => {
