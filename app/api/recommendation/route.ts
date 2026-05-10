@@ -561,6 +561,23 @@ function fallbackCriticAgent({
   };
 }
 
+function parseCriticOutput(output: string) {
+  try {
+    const parsed = JSON.parse(output) as { passed?: boolean; issues?: string[]; summary?: string };
+    return {
+      passed: Boolean(parsed.passed),
+      issues: Array.isArray(parsed.issues) ? parsed.issues : [],
+      summary: typeof parsed.summary === "string" ? parsed.summary : "",
+    };
+  } catch {
+    return { passed: false, issues: [], summary: "" };
+  }
+}
+
+function isArithmeticIssue(issue: string) {
+  return /subtotal|total|line item|line total|kalkulasi|hitung|perhitungan/i.test(issue);
+}
+
 async function runCriticAgent({
   intake,
   diagnosis,
@@ -578,6 +595,15 @@ async function runCriticAgent({
   subtotal: number;
   channel: AgentChannel;
 }): Promise<AgentAssessment> {
+  const deterministicAssessment = fallbackCriticAgent({
+    intake,
+    items,
+    subtotal,
+    calculator,
+  });
+  const deterministicAudit = parseCriticOutput(deterministicAssessment.output);
+  const lineTotal = items.reduce((total, item) => total + item.lineTotal, 0);
+  const subtotalConsistent = Math.abs(lineTotal - subtotal) <= 1;
   const input = JSON.stringify({
     inbox: channel.inbox("Critic Agent"),
     intake,
@@ -585,6 +611,12 @@ async function runCriticAgent({
     retrieval,
     calculator,
     subtotal,
+    deterministicAudit: {
+      subtotalConsistent,
+      lineTotal,
+      subtotal,
+      issues: deterministicAudit.issues,
+    },
     items: items.map((item) => ({
       name: item.name,
       category: item.category,
@@ -610,6 +642,7 @@ async function runCriticAgent({
         abortSignal: AbortSignal.timeout(aiAttemptTimeoutMs()),
         system: `Anda adalah Critic Agent untuk sistem multi-agent bahan bangunan.
 Periksa apakah rekomendasi sudah grounded pada item yang tersedia, quantity masuk akal, kalkulasi dipakai, dan subtotal konsisten.
+Audit deterministik pada input adalah sumber kebenaran untuk aritmetika subtotal; jangan melaporkan isu subtotal jika deterministicAudit.subtotalConsistent bernilai true.
 Jangan menambah produk baru. Jika ada isu, jelaskan singkat.`,
         messages: [
           {
@@ -619,15 +652,29 @@ Jangan menambah produk baru. Jika ada isu, jelaskan singkat.`,
         ],
       });
 
+      const llmIssues = object.issues.filter(
+        (issue) => !(subtotalConsistent && isArithmeticIssue(issue)),
+      );
+      const issues = [...new Set([...deterministicAudit.issues, ...llmIssues])];
+      const passed = issues.length === 0;
       const assessment = {
-        summary:
-          object.issues.length > 0
-            ? `${object.summary} Isu: ${object.issues.join(" ")}`
-            : object.summary,
-        decision: object.decision,
-        confidence: confidence(object.confidence),
+        summary: passed
+          ? deterministicAssessment.summary
+          : `Validasi menemukan ${issues.length} isu: ${issues.join(" ")}`,
+        decision: passed ? deterministicAssessment.decision : object.decision,
+        confidence: passed ? Math.max(confidence(object.confidence), 0.92) : 0.55,
         input,
-        output: JSON.stringify(object),
+        output: JSON.stringify({
+          ...object,
+          passed,
+          issues,
+          deterministicAudit: {
+            subtotalConsistent,
+            lineTotal,
+            subtotal,
+            issues: deterministicAudit.issues,
+          },
+        }),
         fallback: false,
       };
 
@@ -636,7 +683,7 @@ Jangan menambah produk baru. Jika ada isu, jelaskan singkat.`,
         to: "Audit Agent",
         type: "critic.result",
         summary: assessment.summary,
-        payload: object,
+        payload: JSON.parse(assessment.output),
       });
 
       return assessment;
@@ -646,7 +693,7 @@ Jangan menambah produk baru. Jika ada isu, jelaskan singkat.`,
   }
 
   void lastError;
-  const assessment = fallbackCriticAgent({ intake, items, subtotal, calculator });
+  const assessment = deterministicAssessment;
   channel.send({
     from: "Critic Agent",
     to: "Audit Agent",

@@ -77,7 +77,7 @@ export function calculatePaint({
     coats,
     coveragePerKg: effectiveCoveragePerKg,
     requiredKg,
-    explanation: `(${areaM2} m2 x ${coats} lapis) / ${effectiveCoveragePerKg} m2/kg/lapis = ${requiredKg} kg.`,
+    explanation: `(${areaM2} m2 x ${coats} lapis) / ${effectiveCoveragePerKg} m2/L/lapis = ${requiredKg} L.`,
   };
 }
 

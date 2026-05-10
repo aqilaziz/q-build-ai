@@ -23,17 +23,18 @@ describe("renovation calculators", () => {
   });
 
   test("calculates paint requirement from area, coats, and coverage", () => {
-    expect(
-      calculatePaint({
-        areaM2: 12,
-        coats: 2,
-        coveragePerKg: 10,
-      }),
-    ).toMatchObject({
+    const result = calculatePaint({
+      areaM2: 12,
+      coats: 2,
+      coveragePerKg: 10,
+    });
+
+    expect(result).toMatchObject({
       areaM2: 12,
       coats: 2,
       requiredKg: 2.4,
     });
+    expect(result.explanation).toContain("m2/L/lapis");
   });
 
   test("rounds tile boxes to purchasable units", () => {

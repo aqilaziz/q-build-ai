@@ -20,6 +20,14 @@ import {
   SavedQuote,
 } from "@/components/quote-data";
 
+function TraceText({ children }: { children: string }) {
+  return (
+    <p className="mt-1 min-w-0 whitespace-pre-wrap break-words leading-5 [overflow-wrap:anywhere]">
+      {children}
+    </p>
+  );
+}
+
 function AgentWorkflowTraceSummary({ trace }: { trace: AgentTraceStep[] }) {
   const totalDuration = trace.reduce(
     (total, entry) => total + (entry.durationMs ?? 0),
@@ -76,7 +84,7 @@ function AgentWorkflowTraceSummary({ trace }: { trace: AgentTraceStep[] }) {
                   {message.from} {"->"} {message.to}
                 </p>
                 <p className="font-semibold text-[#52645c]">{message.type}</p>
-                <p>{message.summary}</p>
+                <TraceText>{message.summary}</TraceText>
               </div>
             ))}
           </div>
@@ -84,16 +92,19 @@ function AgentWorkflowTraceSummary({ trace }: { trace: AgentTraceStep[] }) {
       ) : null}
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         {trace.map((entry, index) => (
-          <div key={`${entry.step}-${index}`} className="rounded-md bg-[#fafbf8] p-3">
+          <div
+            key={`${entry.step}-${index}`}
+            className="min-w-0 rounded-md bg-[#fafbf8] p-3"
+          >
             <p className="text-xs font-semibold uppercase text-[#52645c]">
               {index + 1}. {entry.step}
             </p>
             <p className="mt-1 text-sm font-bold">{entry.agent}</p>
-            <p className="mt-1 text-sm leading-5 text-[#52645c]">
+            <p className="mt-1 min-w-0 break-words text-sm leading-5 text-[#52645c] [overflow-wrap:anywhere]">
               {entry.summary}
             </p>
             {entry.decision ? (
-              <p className="mt-2 text-xs leading-5">
+              <p className="mt-2 min-w-0 break-words text-xs leading-5 [overflow-wrap:anywhere]">
                 <span className="font-bold uppercase text-[#52645c]">
                   Decision:
                 </span>{" "}

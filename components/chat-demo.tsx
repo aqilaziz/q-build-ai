@@ -99,6 +99,14 @@ function getServerReadySnapshot() {
   return false;
 }
 
+function TraceText({ children }: { children: string }) {
+  return (
+    <p className="mt-1 min-w-0 whitespace-pre-wrap break-words leading-5 [overflow-wrap:anywhere]">
+      {children}
+    </p>
+  );
+}
+
 function AgentWorkflowTrace({ trace }: { trace: AgentTraceStep[] }) {
   const totalDuration = trace.reduce(
     (total, entry) => total + (entry.durationMs ?? 0),
@@ -164,7 +172,7 @@ function AgentWorkflowTrace({ trace }: { trace: AgentTraceStep[] }) {
                   {message.from} {"->"} {message.to}
                 </p>
                 <p className="font-semibold text-[#52645c]">{message.type}</p>
-                <p>{message.summary}</p>
+                <TraceText>{message.summary}</TraceText>
               </div>
             ))}
           </div>
@@ -179,33 +187,33 @@ function AgentWorkflowTrace({ trace }: { trace: AgentTraceStep[] }) {
             <span className="flex size-7 items-center justify-center rounded-md bg-[#edf5ee] text-xs font-bold text-[#174832]">
               {index + 1}
             </span>
-            <div>
+            <div className="min-w-0">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <p className="text-sm font-bold">{entry.step}</p>
                 <p className="text-xs font-semibold uppercase text-[#68776b]">
                   {entry.agent}
                 </p>
               </div>
-              <p className="mt-1 text-sm leading-5 text-[#52645c]">
+              <p className="mt-1 min-w-0 break-words text-sm leading-5 text-[#52645c] [overflow-wrap:anywhere]">
                 {entry.summary}
               </p>
               <div className="mt-2 grid gap-2 text-xs md:grid-cols-3">
                 {entry.input ? (
-                  <div className="rounded-md bg-[#fafbf8] p-2">
+                  <div className="min-w-0 rounded-md bg-[#fafbf8] p-2">
                     <p className="font-bold uppercase text-[#52645c]">Input</p>
-                    <p className="mt-1 leading-5">{entry.input}</p>
+                    <TraceText>{entry.input}</TraceText>
                   </div>
                 ) : null}
                 {entry.output ? (
-                  <div className="rounded-md bg-[#fafbf8] p-2">
+                  <div className="min-w-0 rounded-md bg-[#fafbf8] p-2">
                     <p className="font-bold uppercase text-[#52645c]">Output</p>
-                    <p className="mt-1 leading-5">{entry.output}</p>
+                    <TraceText>{entry.output}</TraceText>
                   </div>
                 ) : null}
                 {entry.decision ? (
-                  <div className="rounded-md bg-[#fafbf8] p-2">
+                  <div className="min-w-0 rounded-md bg-[#fafbf8] p-2">
                     <p className="font-bold uppercase text-[#52645c]">Decision</p>
-                    <p className="mt-1 leading-5">{entry.decision}</p>
+                    <TraceText>{entry.decision}</TraceText>
                   </div>
                 ) : null}
               </div>
