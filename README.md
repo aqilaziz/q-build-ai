@@ -75,15 +75,15 @@ The demo exposes a professional audit trail called **Agent Workflow Trace** in t
 
 The detailed handoff contract is documented in [docs/agent-architecture.md](docs/agent-architecture.md). The current runtime uses an explicit `AgentChannel` inbox/outbox so each agent exchanges typed messages such as `intake.result`, `diagnosis.result`, `retrieval.result`, `quantity.result`, `quotation.draft`, and `critic.result`. Intake, Repair Diagnosis, and Critic use separate structured model calls; retrieval, calculation, quotation composition, and audit persistence are independent tool-backed stages with deterministic fallbacks.
 
-| Trace step | Demo agent | Responsibility |
-| --- | --- | --- |
-| Problem Intake | Intake Agent | Normalizes the customer problem, area, and optional photo context. |
-| Diagnosis | Repair Diagnosis Agent | Classifies the repair case, such as roof leak/waterproofing or repainting. |
-| Catalog Retrieval | Product RAG Agent | Selects grounded QHomemart-style catalog products for the problem. |
-| Material Calculator | Quantity Tool Agent | Computes deterministic material needs and package round-up. |
-| Quotation | Quotation Agent | Builds the shopping list, line totals, subtotal, and customer-facing rationale. |
-| Validation/Critic | Critic Agent | Checks product completeness, quantity math, and subtotal consistency. |
-| Trace Logger | Audit Agent | Stores the trace with the quotation for review and PDF export. |
+| Trace step          | Demo agent             | Responsibility                                                                  |
+| ------------------- | ---------------------- | ------------------------------------------------------------------------------- |
+| Problem Intake      | Intake Agent           | Normalizes the customer problem, area, and optional photo context.              |
+| Diagnosis           | Repair Diagnosis Agent | Classifies the repair case, such as roof leak/waterproofing or repainting.      |
+| Catalog Retrieval   | Product RAG Agent      | Selects grounded QHomemart-style catalog products for the problem.              |
+| Material Calculator | Quantity Tool Agent    | Computes deterministic material needs and package round-up.                     |
+| Quotation           | Quotation Agent        | Builds the shopping list, line totals, subtotal, and customer-facing rationale. |
+| Validation/Critic   | Critic Agent           | Checks product completeness, quantity math, and subtotal consistency.           |
+| Trace Logger        | Audit Agent            | Stores the trace with the quotation for review and PDF export.                  |
 
 ## Demo Scenarios
 
@@ -201,13 +201,13 @@ Variable usage:
 
 ## Competition Judging Criteria Mapping
 
-| Criterion | Implementation | Evidence |
-| --- | --- | --- |
-| **Kualitas Reasoning Agent** | 7-stage explicit multi-agent workflow with AgentChannel inbox/outbox, typed message contracts, and deterministic fallbacks | [docs/agent-architecture.md](docs/agent-architecture.md); [lib/ai/agent-communication.ts](lib/ai/agent-communication.ts) |
-| **Kolaborasi Antar Agent** | Intake → Diagnosis → RAG → Calculator → Quotation → Critic → Audit with clear handoff types (`intake.result`, `diagnosis.result`, etc.) | **Agent Workflow Trace** visible in UI; [app/api/recommendation](app/api) endpoint |
-| **Dampak ke Dunia Nyata** | Solves QHomemart customer triage: diagnose problem → recommend grounded products → calculate material → save quotation | 4 production scenarios: roof leak (15m2), plumbing, paint, wall repair |
-| **Kejelasan Arsitektur** | Comprehensive docs with spec, plan, architecture diagram, deployment guide, and QA checklists | [specs/001-q-build-ai-agent/](specs/001-q-build-ai-agent/); [docs/](docs/) |
-| **Reproducibility** | Single `npm ci && npm run dev` command, seed-products script, Supabase migrations, E2E tests, and Vercel deployment | [docs/vercel-deployment.md](docs/vercel-deployment.md); `.github/workflows/` CI/CD |
+| Criterion                    | Implementation                                                                                                                          | Evidence                                                                                                                 |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Kualitas Reasoning Agent** | 7-stage explicit multi-agent workflow with AgentChannel inbox/outbox, typed message contracts, and deterministic fallbacks              | [docs/agent-architecture.md](docs/agent-architecture.md); [lib/ai/agent-communication.ts](lib/ai/agent-communication.ts) |
+| **Kolaborasi Antar Agent**   | Intake → Diagnosis → RAG → Calculator → Quotation → Critic → Audit with clear handoff types (`intake.result`, `diagnosis.result`, etc.) | **Agent Workflow Trace** visible in UI; [app/api/recommendation](app/api) endpoint                                       |
+| **Dampak ke Dunia Nyata**    | Solves QHomemart customer triage: diagnose problem → recommend grounded products → calculate material → save quotation                  | 4 production scenarios: roof leak (15m2), plumbing, paint, wall repair                                                   |
+| **Kejelasan Arsitektur**     | Comprehensive docs with spec, plan, architecture diagram, deployment guide, and QA checklists                                           | [specs/001-q-build-ai-agent/](specs/001-q-build-ai-agent/); [docs/](docs/)                                               |
+| **Reproducibility**          | Single `npm ci && npm run dev` command, seed-products script, Supabase migrations, E2E tests, and Vercel deployment                     | [docs/vercel-deployment.md](docs/vercel-deployment.md); `.github/workflows/` CI/CD                                       |
 
 ## Demo & Submission
 
@@ -240,8 +240,6 @@ Variable usage:
 - [ ] Admin catalog management accessible (with auth)
 
 ---
-
-
 
 Optional provider key if Gemini is used later:
 
@@ -374,13 +372,13 @@ Saya butuh bahan khusus yang tidak ada di katalog. Apakah ada rekomendasi?
 
 ## Judging Criteria Mapping
 
-| Criteria | How Q-Build AI demonstrates it |
-| --- | --- |
+| Criteria                 | How Q-Build AI demonstrates it                                                                                                          |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Kualitas Reasoning Agent | Intake, Diagnosis, and Critic use structured model outputs with deterministic fallback; material math and subtotal are tool-calculated. |
-| Kolaborasi Antar Agent | `AgentChannel` records typed handoffs across Intake, Diagnosis, Product RAG, Quantity, Quotation, Critic, and Audit agents. |
-| Dampak Dunia Nyata | Converts home-repair symptoms into grounded product baskets, quantities, subtotal, and saved quotations for store workflow. |
-| Kejelasan Arsitektur | README, specs, and `docs/agent-architecture.md` document the system, message contracts, and database design. |
-| Reproducibility | Supabase migrations, seed/embedding scripts, `.env.example`, smoke E2E tests, and production checklist are included. |
+| Kolaborasi Antar Agent   | `AgentChannel` records typed handoffs across Intake, Diagnosis, Product RAG, Quantity, Quotation, Critic, and Audit agents.             |
+| Dampak Dunia Nyata       | Converts home-repair symptoms into grounded product baskets, quantities, subtotal, and saved quotations for store workflow.             |
+| Kejelasan Arsitektur     | README, specs, and `docs/agent-architecture.md` document the system, message contracts, and database design.                            |
+| Reproducibility          | Supabase migrations, seed/embedding scripts, `.env.example`, smoke E2E tests, and production checklist are included.                    |
 
 ## Acceptance Targets
 
