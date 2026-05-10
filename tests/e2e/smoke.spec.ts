@@ -219,14 +219,33 @@ test.describe("smoke pages", () => {
       );
     });
     let bulkDeleteCalled = false;
-    await page.route("**/api/admin/catalog", async (route) => {
+    let importCalled = false;
+    await page.route("**/api/admin/catalog**", async (route) => {
+      const requestUrl = new URL(route.request().url());
+      if (route.request().method() === "GET" && requestUrl.searchParams.get("export")) {
+        const format = requestUrl.searchParams.get("export");
+        await route.fulfill({
+          status: 200,
+          contentType:
+            format === "pdf"
+              ? "application/pdf"
+              : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          headers: {
+            "content-disposition": `attachment; filename="q-build-products.${format === "pdf" ? "pdf" : "xlsx"}"`,
+          },
+          body: format === "pdf" ? "%PDF-1.4" : "excel",
+        });
+        return;
+      }
+
       if (route.request().method() === "POST") {
         const body = route.request().postData() ?? "";
         bulkDeleteCalled = body.includes("deleteProducts");
+        importCalled = body.includes("importProducts");
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ ok: true }),
+          body: JSON.stringify({ ok: true, importCount: importCalled ? 1 : null }),
         });
         return;
       }
@@ -297,6 +316,26 @@ test.describe("smoke pages", () => {
     await expect(priceInput).toBeVisible();
     await priceInput.fill("2500000");
     await expect(priceInput).toHaveValue("2.500.000");
+    await expect(page.getByRole("button", { name: "Import CSV/Excel" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Export Excel" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Export PDF" })).toBeVisible();
+
+    const excelDownload = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export Excel" }).click();
+    await expect((await excelDownload).suggestedFilename()).toBe("q-build-products.xlsx");
+
+    const pdfDownload = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export PDF" }).click();
+    await expect((await pdfDownload).suggestedFilename()).toBe("q-build-products.pdf");
+
+    await page.locator('input[accept*=".csv"]').setInputFiles({
+      name: "products.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from("name,category,unit,price\nProduk Import,paint,pcs,12000\n"),
+    });
+    await expect(page.getByText("1 produk berhasil diimport.")).toBeVisible();
+    expect(importCalled).toBe(true);
+
     await page.getByLabel("Pilih semua produk yang tampil").check();
     await expect(page.getByText("2 dipilih")).toBeVisible();
     page.once("dialog", (dialog) => {

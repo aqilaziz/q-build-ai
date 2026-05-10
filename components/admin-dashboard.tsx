@@ -5,8 +5,10 @@ import { createClient, type Session } from "@supabase/supabase-js";
 import {
   ArrowLeft,
   Check,
+  Download,
   Eye,
   EyeOff,
+  FileText,
   ImagePlus,
   Layers3,
   Loader2,
@@ -19,8 +21,9 @@ import {
   Search,
   Tag,
   Trash2,
+  Upload,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { formatCurrency } from "@/components/quote-data";
 
 type Category = {
@@ -186,6 +189,7 @@ export function AdminDashboard() {
     color: "#174832",
     is_active: true,
   });
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const token = session?.access_token;
 
@@ -286,6 +290,62 @@ export function AdminDashboard() {
     }
     setMessage(successMessage);
     await loadCatalog();
+  }
+
+  async function importCatalogFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !token) return;
+
+    const formData = new FormData();
+    formData.set("action", "importProducts");
+    formData.set("file", file);
+    setSaving(true);
+    setError("");
+    setMessage("");
+    const response = await fetch("/api/admin/catalog", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    const payload = await response.json();
+    setSaving(false);
+    if (!response.ok) {
+      setError(payload.error ?? "Import produk gagal.");
+      return;
+    }
+    setMessage(`${payload.importCount ?? 0} produk berhasil diimport.`);
+    await loadCatalog();
+  }
+
+  async function exportCatalog(format: "excel" | "pdf") {
+    if (!token) return;
+    setSaving(true);
+    setError("");
+    const response = await fetch(`/api/admin/catalog?export=${format}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setSaving(false);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      setError(payload.error ?? `Export ${format.toUpperCase()} gagal.`);
+      return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const disposition = response.headers.get("content-disposition") ?? "";
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename =
+      match?.[1] ?? (format === "excel" ? "q-build-products.xlsx" : "q-build-products.pdf");
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setMessage(`Export ${format.toUpperCase()} selesai.`);
   }
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
@@ -606,6 +666,40 @@ export function AdminDashboard() {
                 Pilih semua item yang tampil
               </label>
               <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  className="sr-only"
+                  onChange={(event) => void importCatalogFile(event)}
+                />
+                <button
+                  type="button"
+                  onClick={() => importInputRef.current?.click()}
+                  disabled={saving}
+                  className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#cbd3c4] bg-white px-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Upload size={15} />
+                  Import CSV/Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void exportCatalog("excel")}
+                  disabled={saving}
+                  className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#cbd3c4] bg-white px-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Download size={15} />
+                  Export Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void exportCatalog("pdf")}
+                  disabled={saving}
+                  className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#cbd3c4] bg-white px-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <FileText size={15} />
+                  Export PDF
+                </button>
                 <span className="text-xs font-semibold text-[#52645c]">
                   {selectedProductIds.length} dipilih
                 </span>
