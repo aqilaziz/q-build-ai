@@ -29,6 +29,17 @@ const cases = [
     },
   },
   {
+    id: "pipe-quarter-meter",
+    prompt: "Sambungan pipa bocor seperempat meter, standar.",
+    expect: {
+      type: "recommendation",
+      intent: "plumbing",
+      lengthM: 0.25,
+      titleIncludes: "0.25",
+      minTraceSteps: 7,
+    },
+  },
+  {
     id: "paint-krem",
     prompt: "Mau cat dinding 12 m2 warna krem standar.",
     expect: {

@@ -74,7 +74,7 @@ const fallbackQuestions: Record<string, string> = {
   color: "Untuk cat, warna apa yang diinginkan?",
   budgetPreference: "Prefer produk ekonomis, standar, atau premium? Kalau ada batas budget, sebutkan juga.",
   qualityPreference: "Prioritasnya harga hemat, kualitas standar, atau kualitas premium/tahan lama?",
-  lengthM: "Berapa panjang pipa atau area sambungan yang perlu diganti? Contoh: setengah meter atau 2 meter.",
+  lengthM: "Berapa panjang pipa atau area sambungan yang perlu diganti? Contoh: setengah meter, seperempat meter, atau 2 meter.",
 };
 
 const supportedCategoryText =
@@ -157,6 +157,7 @@ const numberWords: Record<string, number> = {
   nol: 0,
   setengah: 0.5,
   separuh: 0.5,
+  seperempat: 0.25,
   satu: 1,
   se: 1,
   dua: 2,
@@ -215,10 +216,11 @@ function parseIndonesianNumber(value: string): number | null {
 
   if (normalized in numberWords) return numberWords[normalized];
 
-  const mixedHalf = normalized.match(/^(.+?)\s+(setengah|separuh)$/);
-  if (mixedHalf) {
-    const base = parseIndonesianNumber(mixedHalf[1]);
-    return base ? base + 0.5 : null;
+  const mixedFraction = normalized.match(/^(.+?)\s+(setengah|separuh|seperempat)$/);
+  if (mixedFraction) {
+    const base = parseIndonesianNumber(mixedFraction[1]);
+    const fraction = numberWords[mixedFraction[2]];
+    return base && fraction ? base + fraction : null;
   }
 
   return null;
@@ -234,7 +236,7 @@ function extractMeasure(text: string, unitPattern: string) {
   if (numericMatch) return Number(numericMatch[1].replace(",", "."));
 
   const wordPattern = new RegExp(
-    `\\b((?:satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh|sebelas|dua belas|tiga belas|empat belas|lima belas|enam belas|tujuh belas|delapan belas|sembilan belas|dua puluh)(?:\\s+(?:setengah|separuh))?|setengah|separuh)\\s+(${unitPattern})\\b`,
+    `\\b((?:satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh|sebelas|dua belas|tiga belas|empat belas|lima belas|enam belas|tujuh belas|delapan belas|sembilan belas|dua puluh)(?:\\s+(?:setengah|separuh|seperempat))?|setengah|separuh|seperempat)\\s+(${unitPattern})\\b`,
     "i",
   );
   const wordMatch = normalized.match(wordPattern);
@@ -401,7 +403,7 @@ Aturan intent:
 - Untuk atap bocor/dak bocor/rembes, intent = waterproofing.
 - Untuk cat ulang/repaint/warna dinding, intent = paint.
 - Untuk dinding retak, retak rambut, lubang, dempul, acian, plester, cat mengelupas, atau dinding rembes/lembap tanpa permintaan warna/cat, intent = wall_repair.
-- Untuk pipa bocor, sambungan pipa, keran/drat bocor, intent = plumbing. Jika user menyebut "setengah meter", lengthM = 0.5.
+- Untuk pipa bocor, sambungan pipa, keran/drat bocor, intent = plumbing. Jika user menyebut "setengah meter", lengthM = 0.5. Jika user menyebut "seperempat meter", lengthM = 0.25.
 - Jika user menyebut warna lokal seperti krem/cream/beige/putih tulang/abu-abu, isi color sesuai kata user.
 - Jika gambar menunjukkan noda air/plafon lembap/retak dak/permukaan bocor, arahkan ke waterproofing atau wall_repair sesuai konteks.
 - Jika pelanggan meminta produk di luar katalog renovasi, seperti kipas/AC/elektronik/furniture, intent = unknown dan jangan tanya budget.
@@ -1828,6 +1830,7 @@ export async function POST(request: Request) {
     }
 
     const missingFields = requiredMissingFields(intake);
+    intake.missingFields = missingFields;
 
     if (missingFields.length > 0) {
       return Response.json({
