@@ -8,6 +8,7 @@ Latest automated checks:
 Production URL: https://qbuilt-ai.vercel.app
 Git SHA: ce33626
 npm run supabase:verify: PASS
+npm run test:unit: PASS
 $env:EVAL_BASE_URL="https://qbuilt-ai.vercel.app"; npm run eval:agents: 7/7 PASS
 Production routes /, /catalog, /admin: HTTP 200
 ```
@@ -36,6 +37,12 @@ Production routes /, /catalog, /admin: HTTP 200
 - [x] `match_products` RPC works.
 - [x] Service role connection verified.
 - [x] RLS policies are included in Supabase migrations for quotations and agent trace tables.
+
+## Automated Tests
+
+- [x] `npm run test:unit` passes: calculator and Indonesian parser coverage.
+- [x] `npm run test:e2e` passes: smoke UI, catalog, quote detail, admin, upload, and chat flows.
+- [x] `npm run eval:agents` passes locally and against production.
 
 ## Demo Scenarios
 

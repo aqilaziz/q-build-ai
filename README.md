@@ -159,6 +159,7 @@ Run checks:
 ```powershell
 npm run lint
 npm run build
+npm run test:unit
 npm run test:e2e
 ```
 
@@ -207,7 +208,7 @@ Variable usage:
 | **Kolaborasi Antar Agent**   | Intake → Diagnosis → RAG → Calculator → Quotation → Critic → Audit with clear handoff types (`intake.result`, `diagnosis.result`, etc.) | **Agent Workflow Trace** visible in UI; [app/api/recommendation](app/api) endpoint                                       |
 | **Dampak ke Dunia Nyata**    | Solves QHomemart customer triage: diagnose problem → recommend grounded products → calculate material → save quotation                  | 4 production scenarios: roof leak (15m2), plumbing, paint, wall repair                                                   |
 | **Kejelasan Arsitektur**     | Comprehensive docs with spec, plan, architecture diagram, deployment guide, and QA checklists                                           | [specs/001-q-build-ai-agent/](specs/001-q-build-ai-agent/); [docs/](docs/)                                               |
-| **Reproducibility**          | Single `npm ci && npm run dev` command, seed-products script, Supabase migrations, E2E tests, and Vercel deployment                     | [docs/vercel-deployment.md](docs/vercel-deployment.md); `.github/workflows/` CI/CD                                       |
+| **Reproducibility**          | Single `npm ci && npm run dev` command, seed-products script, Supabase migrations, unit tests, E2E tests, and Vercel deployment         | [docs/vercel-deployment.md](docs/vercel-deployment.md); `.github/workflows/` CI/CD                                       |
 
 ## Demo & Submission
 
@@ -378,7 +379,7 @@ Saya butuh bahan khusus yang tidak ada di katalog. Apakah ada rekomendasi?
 | Kolaborasi Antar Agent   | `AgentChannel` records typed handoffs across Intake, Diagnosis, Product RAG, Quantity, Quotation, Critic, and Audit agents.             |
 | Dampak Dunia Nyata       | Converts home-repair symptoms into grounded product baskets, quantities, subtotal, and saved quotations for store workflow.             |
 | Kejelasan Arsitektur     | README, specs, and `docs/agent-architecture.md` document the system, message contracts, and database design.                            |
-| Reproducibility          | Supabase migrations, seed/embedding scripts, `.env.example`, smoke E2E tests, and production checklist are included.                    |
+| Reproducibility          | Supabase migrations, seed/embedding scripts, `.env.example`, unit tests, smoke E2E tests, and production checklist are included.        |
 
 ## Acceptance Targets
 

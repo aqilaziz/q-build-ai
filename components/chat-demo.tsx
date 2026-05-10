@@ -20,7 +20,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   AgentTraceStep,
   formatCurrency,
@@ -84,6 +84,19 @@ function readImageAsDataUrl(file: File) {
     reader.onerror = () => reject(new Error("Gagal membaca file gambar."));
     reader.readAsDataURL(file);
   });
+}
+
+function subscribeClientReady(onStoreChange: () => void) {
+  queueMicrotask(onStoreChange);
+  return () => {};
+}
+
+function getClientReadySnapshot() {
+  return true;
+}
+
+function getServerReadySnapshot() {
+  return false;
 }
 
 function AgentWorkflowTrace({ trace }: { trace: AgentTraceStep[] }) {
@@ -222,6 +235,11 @@ function AgentWorkflowTrace({ trace }: { trace: AgentTraceStep[] }) {
 }
 
 export function ChatDemo() {
+  const isHydrated = useSyncExternalStore(
+    subscribeClientReady,
+    getClientReadySnapshot,
+    getServerReadySnapshot,
+  );
   const [messages, setMessages] = useState(initialMessages);
   const [input, setInput] = useState(samplePrompts[0]);
   const [attachedImage, setAttachedImage] = useState<File | null>(null);
@@ -481,7 +499,11 @@ export function ChatDemo() {
               </div>
             ) : null}
 
-            <form onSubmit={handleSubmit} className="border-t border-[#e5e8df] p-3">
+            <form
+              onSubmit={handleSubmit}
+              className="border-t border-[#e5e8df] p-3"
+              data-chat-ready={isHydrated ? "true" : "false"}
+            >
               {attachedImage ? (
                 <div className="mb-2 flex items-center justify-between gap-2 rounded-md bg-[#eef5fb] px-3 py-2 text-sm text-[#25476a]">
                   <span className="min-w-0 truncate">
@@ -511,6 +533,7 @@ export function ChatDemo() {
                 <button
                   type="button"
                   onClick={() => imageInputRef.current?.click()}
+                  disabled={!isHydrated}
                   className="flex size-11 shrink-0 items-center justify-center rounded-md border border-[#cbd3c4] text-[#26342b]"
                   aria-label="Upload foto"
                 >
@@ -525,7 +548,7 @@ export function ChatDemo() {
                 />
                 <button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isLoading || !isHydrated}
                   className="flex size-11 shrink-0 items-center justify-center rounded-md bg-[#174832] text-white disabled:opacity-60"
                   aria-label="Kirim"
                 >

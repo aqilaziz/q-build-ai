@@ -1,8 +1,14 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
+
+async function gotoHome(page: Page) {
+  await page.goto("/");
+  await expect(page.locator('form[data-chat-ready="true"]')).toBeVisible();
+  await expect(page.getByRole("button", { name: "Kirim" })).toBeEnabled();
+}
 
 test.describe("smoke pages", () => {
   test("home shows the Q-Build AI demo workspace", async ({ page }) => {
-    await page.goto("/");
+    await gotoHome(page);
 
     await expect(
       page.getByRole("heading", { name: "Q-Build AI Demo" }),
@@ -39,7 +45,7 @@ test.describe("smoke pages", () => {
       });
     });
 
-    await page.goto("/");
+    await gotoHome(page);
 
     await page.getByLabel("Pesan renovasi").fill("Atap bocor 12 m2, kualitas standar");
     await page.getByRole("button", { name: "Kirim" }).click();
@@ -67,7 +73,7 @@ test.describe("smoke pages", () => {
       });
     });
 
-    await page.goto("/");
+    await gotoHome(page);
     await page.getByLabel("Pesan renovasi").fill("Atap saya bocor");
     await page.getByRole("button", { name: "Kirim" }).click();
 
@@ -91,7 +97,7 @@ test.describe("smoke pages", () => {
       });
     });
 
-    await page.goto("/");
+    await gotoHome(page);
     await page.getByLabel("Pesan renovasi").fill("kipas saya rusak, mau beli baru");
     await page.getByRole("button", { name: "Kirim" }).click();
 
@@ -146,7 +152,7 @@ test.describe("smoke pages", () => {
       });
     });
 
-    await page.goto("/");
+    await gotoHome(page);
     await page.getByLabel("Pesan renovasi").fill("Pipa wastafel bocor setengah meter, standar");
     await page.getByRole("button", { name: "Kirim" }).click();
     await expect(page.getByText("Perbaikan pipa bocor 0.5 m")).toBeVisible();
@@ -180,7 +186,7 @@ test.describe("smoke pages", () => {
       });
     });
 
-    await page.goto("/");
+    await gotoHome(page);
     await page.locator('input[type="file"]').setInputFiles({
       name: "retak.png",
       mimeType: "image/png",
