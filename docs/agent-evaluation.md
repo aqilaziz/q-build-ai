@@ -29,10 +29,10 @@ $env:EVAL_BASE_URL="https://qbuilt-ai.vercel.app"; npm run eval:agents
 ## Latest Verified Run
 
 ```text
-Date: 2026-05-10 11:59 +07:00
+Date: 2026-05-10 13:19 +07:00
 Base URL: https://qbuilt-ai.vercel.app
-Git SHA: ce33626
+Git SHA: ca97521
 Result: 7/7 passed
-Average latency: 9748 ms
+Average latency: 9912 ms
 Notes: Production API returned correct intent/fields for five recommendation scenarios, including setengah meter = 0.5 and seperempat meter = 0.25, plus one clarification scenario and one unsupported catalog scenario. Recommendation cases included at least 7 agent trace steps.
 ```
