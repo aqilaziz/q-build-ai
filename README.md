@@ -2,6 +2,24 @@
 
 Q-Build AI is a mobile-first renovation shopping agent for the QHomemart AI Agent Competition. It helps customers move from a vague home repair problem to grounded product recommendations, material quantities, cost estimates, and a saved quotation.
 
+## Live Demo
+
+Production URL: _set this after Vercel deployment_
+
+Local URL:
+
+```text
+http://localhost:3000
+```
+
+Submission assets:
+
+- [Agent architecture](docs/agent-architecture.md)
+- [5-minute demo script](docs/submission-demo-script.md)
+- [Production checklist](docs/production-checklist.md)
+- [Vercel deployment guide](docs/vercel-deployment.md)
+- [Manual QA checklist](docs/qa-manual-acceptance.md)
+
 ## Problem
 
 Home-improvement customers often know the symptom but not the right material, quantity, or budget. A customer might say:
@@ -22,22 +40,24 @@ Q-Build AI works as a repair and shopping assistant:
 - estimates subtotal from selected catalog products
 - saves the result as a quotation/shopping list for later review
 
-The MVP is intentionally narrow: roof leak/waterproofing and wall repainting are the primary demo flows.
+The core demo is roof leak/waterproofing, with additional validated flows for paint, tile, plumbing, and wall repair.
 
 ## Architecture
 
 ```text
 Browser
   -> Next.js App Router UI
-  -> /api/chat
-     -> Vercel AI SDK streamText
-     -> AI tools:
-        - searchProducts
-        - calculateWaterproofing / calculatePaint / calculateTiles
-        - calculateSubtotal / calculateInstallment
-        - saveQuotation
+  -> /api/recommendation
+     -> AgentChannel message passing
+     -> Intake Agent
+     -> Repair Diagnosis Agent
+     -> Product RAG Agent
+     -> Quantity Tool Agent
+     -> Quotation Agent
+     -> Critic Agent
+     -> Audit Agent
      -> Supabase Postgres + pgvector
-     -> OpenAI model
+     -> OpenAI-compatible model
 ```
 
 Core principles:
@@ -63,6 +83,26 @@ The detailed handoff contract is documented in [docs/agent-architecture.md](docs
 | Quotation | Quotation Agent | Builds the shopping list, line totals, subtotal, and customer-facing rationale. |
 | Validation/Critic | Critic Agent | Checks product completeness, quantity math, and subtotal consistency. |
 | Trace Logger | Audit Agent | Stores the trace with the quotation for review and PDF export. |
+
+## Demo Scenarios
+
+Use these prompts to verify the main judging flows:
+
+```text
+Atap kamar saya bocor setelah hujan deras. Luas area sekitar 15 meter persegi. Preferensi standar. Saya harus beli apa dan kira-kira habis berapa?
+```
+
+```text
+Pipa wastafel bocor setengah meter, standar.
+```
+
+```text
+Mau cat dinding 12 m2 warna krem standar.
+```
+
+```text
+Dinding rembes dan retak rambut, luas sekitar 10 m2. Preferensi standar.
+```
 
 ## Tech Stack
 
@@ -284,11 +324,11 @@ Saya butuh bahan khusus yang tidak ada di katalog. Apakah ada rekomendasi?
 
 | Criteria | How Q-Build AI demonstrates it |
 | --- | --- |
-| Innovation | Combines image/text diagnosis, RAG product search, and tool-using material calculation in one shopping agent. |
-| Usefulness | Converts a real home repair symptom into products, quantities, subtotal, and a saved shopping plan. |
-| Technical quality | Uses Next.js App Router, Vercel AI SDK tools, Supabase pgvector, RLS, and deterministic calculators. |
-| Business impact | Helps QHomemart customers decide faster and gives staff a repeatable quotation workflow. |
-| Demo quality | Mobile-first flow with a narrow, predictable roof leak scenario and manual QA checklist. |
+| Kualitas Reasoning Agent | Intake, Diagnosis, and Critic use structured model outputs with deterministic fallback; material math and subtotal are tool-calculated. |
+| Kolaborasi Antar Agent | `AgentChannel` records typed handoffs across Intake, Diagnosis, Product RAG, Quantity, Quotation, Critic, and Audit agents. |
+| Dampak Dunia Nyata | Converts home-repair symptoms into grounded product baskets, quantities, subtotal, and saved quotations for store workflow. |
+| Kejelasan Arsitektur | README, specs, and `docs/agent-architecture.md` document the system, message contracts, and database design. |
+| Reproducibility | Supabase migrations, seed/embedding scripts, `.env.example`, smoke E2E tests, and production checklist are included. |
 
 ## Acceptance Targets
 
