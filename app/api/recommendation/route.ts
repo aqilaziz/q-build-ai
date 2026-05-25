@@ -2,7 +2,13 @@ import { generateObject, generateText, type ModelMessage } from "ai";
 import { z } from "zod";
 import { calculatePaint, calculateSubtotal, calculateTiles, calculateWaterproofing } from "@/lib/calculators";
 import { createAgentChannel, type AgentChannel } from "@/lib/ai/agent-communication";
-import { extractAreaM2, extractColor, extractLengthM, normalizeText } from "@/lib/ai/intake-parsing";
+import {
+  extractAreaM2,
+  extractAreaM2FromClarification,
+  extractColor,
+  extractLengthM,
+  normalizeText,
+} from "@/lib/ai/intake-parsing";
 import { searchProducts } from "@/lib/ai/products";
 import { getChatModels } from "@/lib/ai/provider";
 import type { ProductSearchResult } from "@/types/domain";
@@ -260,9 +266,19 @@ function requiredMissingFields(intake: Intake) {
   );
 }
 
-function nextQuestion(intake: Intake, missingFields: string[]) {
-  if (intake.nextQuestion && missingFields.length > 0) return intake.nextQuestion;
+function nextQuestion(_intake: Intake, missingFields: string[]) {
   return fallbackQuestions[missingFields[0]] ?? fallbackQuestions.areaM2;
+}
+
+function previousAssistantQuestionForLastUser(messages: RequestMessage[]) {
+  const lastUserIndex = messages.findLastIndex((message) => message.role === "user");
+  if (lastUserIndex <= 0) return "";
+
+  return (
+    messages
+      .slice(0, lastUserIndex)
+      .findLast((message) => message.role === "assistant")?.content ?? ""
+  );
 }
 
 async function analyzeIntake(messages: RequestMessage[]) {
@@ -363,15 +379,26 @@ function fallbackAnalyzeIntake(messages: RequestMessage[]): Intake {
 
 function normalizeIntakeForIndonesian(input: Intake, messages: RequestMessage[]): Intake {
   const text = normalizeText(userText(messages));
-  const areaM2 = input.areaM2 ?? extractAreaM2(text);
+  const lastUserReply =
+    messages.findLast((message) => message.role === "user")?.content ?? "";
+  const areaM2 =
+    input.areaM2 ??
+    extractAreaM2(text) ??
+    extractAreaM2FromClarification(
+      previousAssistantQuestionForLastUser(messages),
+      lastUserReply,
+    );
   const lengthM = input.lengthM ?? extractLengthM(text);
   const color = input.color ?? extractColor(text);
   const explicitPaint = hasExplicitPaintIntent(text);
   const repairIntent = hasWallRepairIntent(text);
+  const tileIntent = /keramik|ubin|tile|lantai/i.test(text);
   const plumbingIntent = /pipa|plumbing|saluran|keran|drat/i.test(text);
 
   let intent = input.intent;
-  if (plumbingIntent) {
+  if (tileIntent) {
+    intent = "tiles";
+  } else if (plumbingIntent) {
     intent = "plumbing";
   } else if (repairIntent && !explicitPaint) {
     intent = "wall_repair";

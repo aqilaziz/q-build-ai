@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   extractAreaM2,
+  extractAreaM2FromClarification,
   extractColor,
   extractLengthM,
   parseIndonesianNumber,
@@ -19,6 +20,27 @@ describe("Indonesian intake parsing", () => {
     expect(extractAreaM2("luas area sekitar 15 meter persegi")).toBe(15);
     expect(extractAreaM2("cat dinding 12 m2 warna krem")).toBe(12);
     expect(extractAreaM2("area lima belas m2")).toBe(15);
+  });
+
+  test("extracts short area clarification replies", () => {
+    expect(
+      extractAreaM2FromClarification(
+        "Berapa luas area yang terdampak?",
+        "3 meter",
+      ),
+    ).toBe(3);
+    expect(
+      extractAreaM2FromClarification(
+        "Berapa luas area yang dikerjakan dalam m2? Kalau belum pasti, boleh estimasi panjang x lebar.",
+        "sekitar tiga",
+      ),
+    ).toBe(3);
+    expect(
+      extractAreaM2FromClarification(
+        "Berapa panjang pipa yang perlu diganti?",
+        "setengah meter",
+      ),
+    ).toBeNull();
   });
 
   test("extracts plumbing length from fractional prompts", () => {

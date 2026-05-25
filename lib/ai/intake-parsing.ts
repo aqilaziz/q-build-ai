@@ -96,6 +96,34 @@ export function extractAreaM2(text: string) {
   return extractMeasure(text, "m2|m²|meter persegi");
 }
 
+export function extractAreaM2FromClarification(
+  previousQuestion: string,
+  currentReply: string,
+) {
+  const question = normalizeText(previousQuestion);
+  if (
+    !/\b(luas|area|terdampak|dikerjakan)\b/i.test(question) ||
+    /\b(pipa|sambungan)\b/i.test(question)
+  ) {
+    return null;
+  }
+
+  const explicitArea = extractAreaM2(currentReply);
+  if (explicitArea) return explicitArea;
+
+  const reply = normalizeText(currentReply).trim();
+  const ambiguousMeter = extractMeasure(reply, "meter|m");
+  if (ambiguousMeter) return ambiguousMeter;
+
+  if (/^(?:sekitar|kurang lebih|kira-kira)?\s*[a-z0-9,. -]+\s*$/i.test(reply)) {
+    return parseIndonesianNumber(
+      reply.replace(/^(sekitar|kurang lebih|kira-kira)\s+/i, ""),
+    );
+  }
+
+  return null;
+}
+
 export function extractLengthM(text: string) {
   return extractMeasure(text, "meter|m");
 }
