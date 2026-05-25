@@ -203,6 +203,64 @@ test.describe("smoke pages", () => {
     ).toBeVisible();
   });
 
+  test("home accepts dragged image data for recommendation API", async ({ page }) => {
+    await page.route("**/api/recommendation", async (route) => {
+      const payload = route.request().postDataJSON() as {
+        messages: Array<{
+          imageDataUrl?: string;
+          imageMediaType?: string;
+          imageName?: string;
+        }>;
+      };
+      const lastMessage = payload.messages.at(-1);
+
+      expect(lastMessage?.imageDataUrl).toContain("data:image/png;base64,");
+      expect(lastMessage?.imageMediaType).toBe("image/png");
+      expect(lastMessage?.imageName).toBe("drag-retak.png");
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          type: "clarification",
+          message: "Foto drag-drop diterima. Berapa luas area yang terdampak?",
+          aiProvider: "sumopod",
+        }),
+      });
+    });
+
+    await gotoHome(page);
+    await page.getByLabel("Pesan renovasi").fill("tolong cek foto ini");
+    await page.getByLabel("Area upload foto drag and drop").dispatchEvent(
+      "drop",
+      {
+        dataTransfer: await page.evaluateHandle(() => {
+          const bytes = Uint8Array.from(
+            atob(
+              "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+            ),
+            (char) => char.charCodeAt(0),
+          );
+          const file = new File([bytes], "drag-retak.png", {
+            type: "image/png",
+          });
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(file);
+          return dataTransfer;
+        }),
+      },
+    );
+
+    await expect(
+      page.getByText("Foto siap dianalisis: drag-retak.png"),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Kirim" }).click();
+
+    await expect(
+      page.getByText("Foto drag-drop diterima. Berapa luas area yang terdampak?"),
+    ).toBeVisible();
+  });
+
   test("catalog shows searchable product data", async ({ page }) => {
     await page.goto("/catalog");
 

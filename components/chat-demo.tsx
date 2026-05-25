@@ -20,7 +20,14 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { FormEvent, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  DragEvent,
+  FormEvent,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { AgentTraceField } from "@/components/agent-trace-field";
 import {
   AgentTraceStep,
@@ -251,6 +258,7 @@ export function ChatDemo() {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">(
     "idle",
   );
+  const [isImageDragActive, setIsImageDragActive] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const toolSteps = useMemo(
@@ -279,6 +287,50 @@ export function ChatDemo() {
 
     if (imageInputRef.current) {
       imageInputRef.current.value = "";
+    }
+  }
+
+  function attachImage(file: File | null) {
+    if (!file) {
+      setAttachedImage(null);
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setError("File harus berupa gambar.");
+      return;
+    }
+
+    setError("");
+    setAttachedImage(file);
+  }
+
+  function clearAttachedImage() {
+    setAttachedImage(null);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = "";
+    }
+  }
+
+  function handleImageDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsImageDragActive(false);
+    attachImage(event.dataTransfer.files?.[0] ?? null);
+  }
+
+  function handleImageDragOver(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsImageDragActive(true);
+  }
+
+  function handleImageDragLeave(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setIsImageDragActive(false);
     }
   }
 
@@ -347,10 +399,7 @@ export function ChatDemo() {
       setRecommendation(
         payload.type === "recommendation" ? payload.recommendation : null,
       );
-      setAttachedImage(null);
-      if (imageInputRef.current) {
-        imageInputRef.current.value = "";
-      }
+      clearAttachedImage();
     } catch (error) {
       setError(
         error instanceof Error
@@ -511,7 +560,7 @@ export function ChatDemo() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => setAttachedImage(null)}
+                    onClick={clearAttachedImage}
                     className="shrink-0"
                     aria-label="Hapus foto"
                   >
@@ -520,6 +569,40 @@ export function ChatDemo() {
                 </div>
               ) : null}
 
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label="Area upload foto drag and drop"
+                onClick={() => imageInputRef.current?.click()}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    imageInputRef.current?.click();
+                  }
+                }}
+                onDrop={handleImageDrop}
+                onDragOver={handleImageDragOver}
+                onDragEnter={handleImageDragOver}
+                onDragLeave={handleImageDragLeave}
+                className={
+                  isImageDragActive
+                    ? "mb-2 flex min-h-20 cursor-pointer items-center gap-3 rounded-md border border-dashed border-[#174832] bg-[#edf5ee] px-3 py-3 text-sm text-[#174832]"
+                    : "mb-2 flex min-h-20 cursor-pointer items-center gap-3 rounded-md border border-dashed border-[#cbd3c4] bg-[#fafbf8] px-3 py-3 text-sm text-[#52645c]"
+                }
+              >
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-white text-[#174832]">
+                  <ImageIcon size={20} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-bold text-[#26342b]">
+                    Foto renovasi
+                  </span>
+                  <span className="mt-0.5 block text-xs">
+                    Tarik gambar ke sini atau pilih dari perangkat.
+                  </span>
+                </span>
+              </div>
+
               <div className="flex gap-2">
                 <input
                   ref={imageInputRef}
@@ -527,7 +610,7 @@ export function ChatDemo() {
                   accept="image/*"
                   className="hidden"
                   onChange={(event) =>
-                    setAttachedImage(event.currentTarget.files?.[0] ?? null)
+                    attachImage(event.currentTarget.files?.[0] ?? null)
                   }
                 />
                 <button
