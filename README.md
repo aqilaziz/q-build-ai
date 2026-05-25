@@ -222,7 +222,7 @@ Variable usage:
 - [x] Manual QA acceptance checklist
 - [x] README with criteria mapping
 - [ ] Demo video (to be recorded)
-- [ ] GitHub repo pushed (01-q-build-ai-agent branch)
+- [x] GitHub repo pushed (`001-q-build-ai-agent` branch)
 
 **QA Acceptance Scenarios**:
 
@@ -233,12 +233,12 @@ Variable usage:
 
 **Production Checklist** (docs/production-checklist.md):
 
-- [ ] Production URL opens on desktop and mobile
-- [ ] Agent Workflow Trace visible in chat
-- [ ] All 4 demo scenarios return appropriate recommendations
-- [ ] Quotation save and history working
-- [ ] PDF export functional
-- [ ] Admin catalog management accessible (with auth)
+- [x] Production URL opens
+- [x] Agent Workflow Trace visible in chat
+- [x] All 4 demo scenarios return appropriate recommendations
+- [x] Quotation save and history working
+- [x] PDF export functional
+- [x] Admin catalog management accessible through auth gate
 
 ---
 

@@ -1,16 +1,19 @@
 # Production Submission Checklist
 
-Verified for submission on `2026-05-10 14:53 +07:00`.
+Verified for submission on `2026-05-25 12:51 +07:00`.
 
 Latest automated checks:
 
 ```text
 Production URL: https://qbuilt-ai.vercel.app
-Git SHA: 14dae23
+Git SHA: 727a9f6
 npm run supabase:verify: PASS
 npm run test:unit: PASS
+npm run test:e2e: PASS (10/10)
 $env:EVAL_BASE_URL="https://qbuilt-ai.vercel.app"; npm run eval:agents: 7/7 PASS
 Production routes /, /catalog, /admin: HTTP 200
+Production catalog product check: PASS
+GitHub repository public/readable: PASS
 ```
 
 ## Deployment
